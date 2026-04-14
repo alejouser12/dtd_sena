@@ -1,0 +1,446 @@
+/* ========================================
+   ESTILOS PARA REGIONALES Y CENTROS - VERSIÓN PREMIUM
+   ======================================== */
+
+/* === ANIMACIONES GLOBALES === */
+@keyframes floatIn {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 10px 30px rgba(57, 169, 0, 0.2); }
+    50% { box-shadow: 0 20px 50px rgba(57, 169, 0, 0.4); }
+}
+
+@keyframes rotateIcon {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* === HEADER DE PÁGINA === */
+.regionales-page-header {
+    text-align: center;
+    margin-bottom: 50px;
+    animation: floatIn 0.8s ease-out;
+}
+
+.regionales-page-header h1 {
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--color-verde-1);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 3px 3px 6px rgba(0,0,0,0.1);
+}
+
+.regionales-page-header p {
+    font-size: 18px;
+    color: var(--color-texto-secundario);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* === GRID PRINCIPAL === */
+.regionales-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+    animation: floatIn 1s ease-out;
+}
+
+/* === TARJETA DE REGIONAL === */
+.regional-card {
+    background: var(--color-blanco);
+    border-radius: 30px;
+    overflow: hidden;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    position: relative;
+    animation: floatIn 0.6s ease-out;
+    animation-fill-mode: both;
+}
+
+.regional-card:nth-child(1) { animation-delay: 0.1s; }
+.regional-card:nth-child(2) { animation-delay: 0.2s; }
+.regional-card:nth-child(3) { animation-delay: 0.3s; }
+.regional-card:nth-child(4) { animation-delay: 0.4s; }
+.regional-card:nth-child(5) { animation-delay: 0.5s; }
+.regional-card:nth-child(6) { animation-delay: 0.6s; }
+
+.regional-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, var(--color-verde-1), var(--color-verde-2), #4caf50);
+}
+
+.regional-card:hover {
+    transform: translateY(-12px) scale(1.02);
+    border-color: var(--color-verde-1);
+    box-shadow: 0 30px 50px rgba(57, 169, 0, 0.3);
+    animation: pulseGlow 2s infinite;
+}
+
+.regional-card:hover .regional-header i {
+    animation: rotateIcon 0.8s ease;
+}
+
+/* === CABECERA DE REGIONAL === */
+.regional-header {
+    background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2), #4caf50);
+    padding: 35px 25px;
+    color: white;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.regional-header::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.regional-card:hover .regional-header::after {
+    opacity: 1;
+}
+
+.regional-header i {
+    font-size: 60px;
+    margin-bottom: 15px;
+    filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3));
+    transition: all 0.5s ease;
+}
+
+.regional-header h3 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+.regional-header .regional-codigo {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    padding: 5px 15px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* === CUERPO DE REGIONAL === */
+.regional-body {
+    padding: 25px;
+    background: linear-gradient(180deg, var(--color-blanco) 0%, rgba(57,169,0,0.02) 100%);
+}
+
+.regional-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: var(--color-texto-secundario);
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.regional-info:hover {
+    background: rgba(57,169,0,0.05);
+    transform: translateX(5px);
+}
+
+.regional-info i {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-verde-1);
+    font-size: 18px;
+    background: rgba(57,169,0,0.1);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.regional-info span {
+    flex: 1;
+}
+
+/* === ESTADÍSTICAS DE REGIONAL === */
+.regional-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px dashed var(--border-color);
+}
+
+.regional-stat {
+    text-align: center;
+}
+
+.regional-stat .valor {
+    display: block;
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--color-verde-1);
+    line-height: 1.2;
+}
+
+.regional-stat .etiqueta {
+    font-size: 12px;
+    color: var(--color-texto-secundario);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* === GRID DE CENTROS === */
+.centros-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 25px;
+    margin-top: 30px;
+    animation: floatIn 0.8s ease-out;
+}
+
+/* === TARJETA DE CENTRO === */
+.centro-card {
+    background: var(--color-blanco);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    position: relative;
+    animation: floatIn 0.5s ease-out;
+    animation-fill-mode: both;
+}
+
+.centro-card:nth-child(1) { animation-delay: 0.05s; }
+.centro-card:nth-child(2) { animation-delay: 0.1s; }
+.centro-card:nth-child(3) { animation-delay: 0.15s; }
+.centro-card:nth-child(4) { animation-delay: 0.2s; }
+.centro-card:nth-child(5) { animation-delay: 0.25s; }
+
+.centro-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--color-verde-1), var(--color-verde-2));
+}
+
+.centro-card:hover {
+    transform: translateY(-10px) scale(1.02);
+    border-color: var(--color-verde-1);
+    box-shadow: 0 25px 45px rgba(57, 169, 0, 0.25);
+}
+
+/* === CABECERA DE CENTRO === */
+.centro-header {
+    background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
+    padding: 25px;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.centro-header::before {
+    content: '\f19d';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    right: -10px;
+    bottom: -20px;
+    font-size: 80px;
+    opacity: 0.1;
+    color: white;
+}
+
+.centro-header i {
+    font-size: 40px;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 5px 10px rgba(0,0,0,0.2));
+}
+
+.centro-header h3 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 10px 0 5px;
+    line-height: 1.4;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+.centro-header .centro-codigo {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    backdrop-filter: blur(5px);
+}
+
+/* === CUERPO DE CENTRO === */
+.centro-body {
+    padding: 25px;
+}
+
+.centro-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    color: var(--color-texto-secundario);
+    font-size: 13px;
+}
+
+.centro-info i {
+    width: 20px;
+    color: var(--color-verde-1);
+    font-size: 14px;
+}
+
+/* === ESTADÍSTICAS DE CENTRO === */
+.centro-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(57,169,0,0.03);
+    border-radius: 16px;
+    border: 1px solid rgba(57,169,0,0.1);
+}
+
+.centro-stat {
+    text-align: center;
+    flex: 1;
+}
+
+.centro-stat .valor {
+    display: block;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--color-verde-1);
+    line-height: 1;
+    margin-bottom: 5px;
+}
+
+.centro-stat .etiqueta {
+    font-size: 11px;
+    color: var(--color-texto-secundario);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* === BOTÓN DE ACCIÓN === */
+.centro-footer {
+    margin-top: 15px;
+    text-align: right;
+}
+
+.btn-ver-centro {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-verde-1);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 30px;
+    transition: all 0.3s ease;
+}
+
+.btn-ver-centro i {
+    transition: transform 0.3s ease;
+}
+
+.btn-ver-centro:hover {
+    background: rgba(57,169,0,0.1);
+    gap: 12px;
+}
+
+.btn-ver-centro:hover i {
+    transform: translateX(5px);
+}
+
+/* === MODO OSCURO === */
+.dark-mode .regional-card,
+.dark-mode .centro-card {
+    background: var(--color-gris-cuerpo);
+}
+
+.dark-mode .regional-body,
+.dark-mode .centro-body {
+    background: var(--color-gris-cuerpo);
+}
+
+.dark-mode .centro-stats {
+    background: rgba(57,169,0,0.1);
+}
+
+.dark-mode .regional-info:hover,
+.dark-mode .centro-info:hover {
+    background: rgba(57,169,0,0.15);
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+    .regionales-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .centros-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .regional-header h3 {
+        font-size: 20px;
+    }
+    
+    .centro-header h3 {
+        font-size: 18px;
+    }
+    
+    .regional-stats {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .regional-header {
+        padding: 25px 15px;
+    }
+    
+    .regional-header i {
+        font-size: 40px;
+    }
+    
+    .centro-stats {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

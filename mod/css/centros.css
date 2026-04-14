@@ -1,0 +1,246 @@
+/* ========================================
+   ESTILOS PARA FICHAS DE CENTROS - VERSIÓN PREMIUM
+   ======================================== */
+
+/* === GRID DE FICHAS === */
+.fichas-grid-centro {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 25px;
+    margin-top: 30px;
+    animation: floatIn 0.8s ease-out;
+}
+
+/* === TARJETA DE FICHA === */
+.ficha-card-centro {
+    background: var(--color-blanco);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    position: relative;
+    animation: floatIn 0.5s ease-out;
+    animation-fill-mode: both;
+}
+
+.ficha-card-centro:nth-child(1) { animation-delay: 0.05s; }
+.ficha-card-centro:nth-child(2) { animation-delay: 0.1s; }
+.ficha-card-centro:nth-child(3) { animation-delay: 0.15s; }
+.ficha-card-centro:nth-child(4) { animation-delay: 0.2s; }
+.ficha-card-centro:nth-child(5) { animation-delay: 0.25s; }
+.ficha-card-centro:nth-child(6) { animation-delay: 0.3s; }
+
+.ficha-card-centro::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, var(--color-verde-1), var(--color-verde-2), #4caf50);
+}
+
+.ficha-card-centro:hover {
+    transform: translateY(-10px) scale(1.02);
+    border-color: var(--color-verde-1);
+    box-shadow: 0 25px 45px rgba(57, 169, 0, 0.25);
+}
+
+/* === CABECERA DE FICHA === */
+.ficha-header-centro {
+    background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
+    padding: 20px 25px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.ficha-header-centro::after {
+    content: '\f02d';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    right: -10px;
+    top: -10px;
+    font-size: 60px;
+    opacity: 0.1;
+    color: white;
+}
+
+.ficha-code-centro {
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 1px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+.ficha-status-centro {
+    background: rgba(255,255,255,0.2);
+    padding: 6px 15px;
+    border-radius: 30px;
+    font-size: 12px;
+    font-weight: 600;
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255,255,255,0.3);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* === CUERPO DE FICHA === */
+.ficha-body-centro {
+    padding: 25px;
+    background: linear-gradient(180deg, var(--color-blanco) 0%, rgba(57,169,0,0.02) 100%);
+}
+
+.ficha-body-centro h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 15px;
+    color: var(--color-texto);
+    line-height: 1.4;
+    border-left: 4px solid var(--color-verde-1);
+    padding-left: 12px;
+}
+
+.ficha-info-centro {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: var(--color-texto-secundario);
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.ficha-info-centro:hover {
+    background: rgba(57,169,0,0.05);
+    transform: translateX(5px);
+}
+
+.ficha-info-centro i {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-verde-1);
+    font-size: 16px;
+    background: rgba(57,169,0,0.1);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.ficha-info-centro strong {
+    color: var(--color-texto);
+    font-weight: 600;
+    margin-left: 5px;
+}
+
+/* === BADGE DE APRENDICES === */
+.ficha-aprendices-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
+    color: white;
+    padding: 8px 16px;
+    border-radius: 40px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 15px;
+    box-shadow: 0 4px 15px rgba(57,169,0,0.3);
+    transition: all 0.3s ease;
+}
+
+.ficha-aprendices-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(57,169,0,0.4);
+}
+
+.ficha-aprendices-badge i {
+    font-size: 16px;
+}
+
+/* === PIE DE FICHA === */
+.ficha-footer-centro {
+    padding: 20px 25px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,0.02));
+}
+
+.btn-ver-ficha {
+    color: var(--color-verde-1);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    padding: 8px 0;
+    transition: all 0.3s ease;
+}
+
+.btn-ver-ficha i {
+    transition: transform 0.3s ease;
+}
+
+.btn-ver-ficha:hover {
+    gap: 12px;
+    color: var(--color-verde-2);
+}
+
+.btn-ver-ficha:hover i {
+    transform: translateX(5px);
+}
+
+.ficha-fecha {
+    font-size: 12px;
+    color: var(--color-texto-secundario);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ficha-fecha i {
+    color: var(--color-verde-1);
+}
+
+/* === MODO OSCURO === */
+.dark-mode .ficha-card-centro {
+    background: var(--color-gris-cuerpo);
+}
+
+.dark-mode .ficha-body-centro {
+    background: var(--color-gris-cuerpo);
+}
+
+.dark-mode .ficha-info-centro:hover {
+    background: rgba(57,169,0,0.15);
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+    .fichas-grid-centro {
+        grid-template-columns: 1fr;
+    }
+    
+    .ficha-header-centro {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .ficha-footer-centro {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+}
