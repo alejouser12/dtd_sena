@@ -2,6 +2,7 @@
 // mod/alertas.php
 session_start();
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../conexion/AlertaDAO.php';
 require_once __DIR__ . '/../conexion/AprendizDAO.php';
 
@@ -23,7 +24,7 @@ $aprendices = $aprendizDAO->obtenerAprendicesPaginados(0, 100);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alertas - DTD SENA</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(asset_url('css/style.css')) ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
@@ -507,13 +508,13 @@ $aprendices = $aprendizDAO->obtenerAprendicesPaginados(0, 100);
 </head>
 <body>
     <div id="loader">
-        <img src="../img/logo_sena_verde.png" alt="Logo SENA" id="loader-logo">
+        <img src="<?= htmlspecialchars(asset_url('img/logo_sena_verde.png')) ?>" alt="Logo SENA" id="loader-logo">
     </div>
 
     <!-- HEADER incluido directamente -->
-    <?php include "../config/header.php"; ?>
+    <?php include __DIR__ . '/../config/header.php'; ?>
 
-    <main class="container">
+    <main class="container" id="contenido-principal" style="display:none; opacity:0;">
         <div class="alertas-header">
             <div class="page-header">
                 <h1 class="page-title">Alertas de Deserción</h1>
@@ -577,16 +578,16 @@ $aprendices = $aprendizDAO->obtenerAprendicesPaginados(0, 100);
                     <div class="alerta-content">
                         <div class="alerta-header">
                             <h3>
-                                <a href="aprendiz_detalle.php?id=<?php echo $alerta['APRENDIZ_ID']; ?>">
-                                    <?php echo $alerta['aprendiz_nombres'] . ' ' . $alerta['aprendiz_apellidos']; ?>
+                                <a href="<?= htmlspecialchars(app_url('mod/aprendiz_detalle.php?id=' . (int)$alerta['APRENDIZ_ID'])) ?>">
+                                    <?php echo htmlspecialchars($alerta['aprendiz_nombres'] . ' ' . $alerta['aprendiz_apellidos']); ?>
                                 </a>
                             </h3>
-                            <span class="alerta-nivel"><?php echo $alerta['NIVEL']; ?></span>
+                            <span class="alerta-nivel"><?php echo htmlspecialchars($alerta['NIVEL']); ?></span>
                         </div>
-                        <p class="alerta-descripcion"><?php echo $alerta['DESCRIPCION']; ?></p>
+                        <p class="alerta-descripcion"><?php echo htmlspecialchars($alerta['DESCRIPCION']); ?></p>
                         <div class="alerta-meta">
-                            <span><i class="fas fa-tag"></i> <?php echo $alerta['TIPO_REGLA'] ?? 'Observación'; ?></span>
-                            <span><i class="fas fa-user-tie"></i> <?php echo $alerta['instructor_nombres'] ?? 'Sistema'; ?></span>
+                            <span><i class="fas fa-tag"></i> <?php echo htmlspecialchars($alerta['TIPO_OBSERVACION'] ?? $alerta['TIPO_REGLA'] ?? 'Seguimiento'); ?></span>
+                            <span><i class="fas fa-user-tie"></i> <?php echo htmlspecialchars(trim(($alerta['instructor_nombres'] ?? 'Sistema') . ' ' . ($alerta['instructor_apellidos'] ?? ''))); ?></span>
                             <span><i class="fas fa-clock"></i> <?php echo date('d/m/Y H:i', strtotime($alerta['FECHA_GENERACION'])); ?></span>
                         </div>
                     </div>
@@ -632,7 +633,7 @@ $aprendices = $aprendizDAO->obtenerAprendicesPaginados(0, 100);
             
             <form id="formNuevaAlerta" onsubmit="guardarAlerta(event)">
                 <input type="hidden" name="estudiante_id" id="estudiante_id" value="">
-                <input type="hidden" name="instructor_id" value="1">
+                <input type="hidden" name="instructor_id" value="<?= (int)($_SESSION['usuario_ref_id'] ?? 0) ?>">
                 
                 <div class="form-group">
                     <label for="tipo">Tipo de Alerta *</label>
@@ -673,15 +674,15 @@ $aprendices = $aprendizDAO->obtenerAprendicesPaginados(0, 100);
     </div>
 
     <!-- FOOTER incluido directamente -->
-    <?php include "../config/footer.php"; ?>
+    <?php include __DIR__ . '/../config/footer.php'; ?>
 
-    <script src="../js/tema.js"></script>
-    <script src="../js/loader.js"></script>
-    <script src="../js/panel_menu.js"></script>
-    <script src="../js/dropdowns.js"></script>
-    <script src="../js/profile_menu.js"></script>
-    <script src="../js/sweetalerts.js"></script>
-    <script src="../js/menu.js"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/tema.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/loader.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/panel_menu.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/dropdowns.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/profile_menu.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/sweetalerts.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/menu.js')) ?>"></script>
     
     <script>
         let aprendizSeleccionadoId = null;

@@ -75,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 <div class="login-backdrop" aria-hidden="true"></div>
 
 <div class="login-wrapper">
+    <div class="login-shell">
 
     <div class="login-header">
         <div class="login-logo">
@@ -219,6 +220,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         © 2026 DTD_SENA. Todos los derechos reservados.
     </div>
 </div>
+
+    </div>
 
 <script src="js/login.js"></script>
 <script src="js/tema.js"></script>

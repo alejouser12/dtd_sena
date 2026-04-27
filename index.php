@@ -2,7 +2,7 @@
 // index.php
 session_start();
 require_once 'config/auth.php'; // <-- NUEVO: protege la página
-require_once 'config/header.php';
+require_once 'config/app.php';
 require_once 'conexion/AlertaDAO.php';
 
 $alertaDAO = new AlertaDAO();
@@ -16,7 +16,7 @@ $alertasAltas = $conteoAlertas['altas'] ?? 0;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detección de Deserción SENA</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(asset_url('css/style.css')) ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -64,10 +64,10 @@ $alertasAltas = $conteoAlertas['altas'] ?? 0;
 </head>
 <body>
     <div id="loader">
-        <img src="img/logo_sena_verde.png" alt="Logo SENA" id="loader-logo">
+        <img src="<?= htmlspecialchars(asset_url('img/logo_sena_verde.png')) ?>" alt="Logo SENA" id="loader-logo">
     </div>
     
-    <!-- EL HEADER YA ESTÁ INCLUIDO EN config/header.php -->
+    <?php include __DIR__ . '/config/header.php'; ?>
     
     <main class="container" id="contenido-principal" style="display:none; opacity:0;">
         <div class="page-header">
@@ -77,28 +77,28 @@ $alertasAltas = $conteoAlertas['altas'] ?? 0;
         
         <ul class="cards-grid">
             <li class="card">
-                <a href="mod/aprendices.php">
+                <a href="<?= htmlspecialchars(app_url('mod/aprendices.php')) ?>">
                     <div class="card-icon"><i class="fas fa-user-graduate"></i></div>
                     <h3 class="card-title">Aprendices</h3>
                     <p class="card-description">Gestión de estudiantes</p>
                 </a>
             </li>
             <li class="card">
-                <a href="mod/instructores.php">
+                <a href="<?= htmlspecialchars(app_url('mod/instructores.php')) ?>">
                     <div class="card-icon"><i class="fas fa-chalkboard-teacher"></i></div>
                     <h3 class="card-title">Instructores</h3>
                     <p class="card-description">Lista de instructores</p>
                 </a>
             </li>
             <li class="card">
-                <a href="mod/regionales.php">
+                <a href="<?= htmlspecialchars(app_url('mod/regionales.php')) ?>">
                     <div class="card-icon"><i class="fas fa-map-marked-alt"></i></div>
                     <h3 class="card-title">Regionales</h3>
                     <p class="card-description">Gestión de regionales y centros</p>
                 </a>
             </li>
             <li class="card" id="alertas-card">
-                <a href="mod/alertas.php">
+                <a href="<?= htmlspecialchars(app_url('mod/alertas.php')) ?>">
                     <div class="card-icon"><i class="fas fa-bell"></i></div>
                     <h3 class="card-title">Alertas</h3>
                     <p class="card-description">Alertas y riesgos</p>
@@ -111,7 +111,7 @@ $alertasAltas = $conteoAlertas['altas'] ?? 0;
                 </a>
             </li>
             <li class="card">
-                <a href="mod/asistencias.php">
+                <a href="<?= htmlspecialchars(app_url('mod/asistencias.php')) ?>">
                     <div class="card-icon">
                         <i class="fas fa-calendar-check"></i>
                     </div>
@@ -120,7 +120,7 @@ $alertasAltas = $conteoAlertas['altas'] ?? 0;
                 </a>
             </li>
             <li class="card">
-                <a href="mod/evidencias.php">
+                <a href="<?= htmlspecialchars(app_url('mod/evidencias.php')) ?>">
                     <div class="card-icon"><i class="fas fa-file-alt"></i></div>
                     <h3 class="card-title">Evidencias</h3>
                     <p class="card-description">Gestión de evidencias</p>
@@ -132,12 +132,12 @@ $alertasAltas = $conteoAlertas['altas'] ?? 0;
     <!-- FOOTER -->
     <?php include 'config/footer.php'; ?>
     
-    <script src="js/tema.js"></script>
-    <script src="js/loader.js"></script>
-    <script src="js/panel_menu.js"></script>
-    <script src="js/dropdowns.js"></script>
-    <script src="js/profile_menu.js"></script>
-    <script src="js/sweetalerts.js"></script>
-    <script src="js/menu.js"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/tema.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/loader.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/panel_menu.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/dropdowns.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/profile_menu.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/sweetalerts.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/menu.js')) ?>"></script>
 </body>
 </html>

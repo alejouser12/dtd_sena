@@ -3,26 +3,20 @@
 session_start();
 header('Content-Type: application/json');
 
-// Activar reporte de errores TEMPORALMENTE
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
 try {
     // Verificar que llegaron los datos
     if (!isset($_POST['estudiante_id']) || !isset($_POST['tipo']) || !isset($_POST['nivel_riesgo']) || !isset($_POST['descripcion'])) {
         throw new Exception('Faltan datos requeridos');
     }
 
-    require_once __DIR__ . '/../conexion/AlertaDAO.php';
-    require_once __DIR__ . '/../conexion/ObservacionDAO.php';
+    require_once __DIR__ . '/../conexion/SeguimientoDAO.php';
 
-    $alertaDAO = new AlertaDAO();
-    $observacionDAO = new ObservacionDAO();
+    $seguimientoDAO = new SeguimientoDAO();
 
     // Preparar datos
     $datos = [
         'estudiante_id' => (int)$_POST['estudiante_id'],
-        'instructor_id' => isset($_SESSION['instructor_id']) ? (int)$_SESSION['instructor_id'] : 1,
+        'instructor_id' => isset($_POST['instructor_id']) ? (int)$_POST['instructor_id'] : (int)($_SESSION['usuario_ref_id'] ?? 0),
         'tipo' => $_POST['tipo'] ?? '',
         'descripcion' => trim($_POST['descripcion']),
         'nivel_riesgo' => $_POST['nivel_riesgo']
@@ -34,27 +28,17 @@ try {
     }
 
     // Crear alerta
-    $resultado = $alertaDAO->crearAlertaDirecta($datos);
+    $resultado = $seguimientoDAO->registrarDesdeAlerta($datos);
 
     if ($resultado) {
-        // Registrar observación paralela para que aparezca en el detalle del aprendiz
-        $observacionId = $observacionDAO->guardarObservacion([
-            'estudiante_id' => $datos['estudiante_id'],
-            'instructor_id' => $datos['instructor_id'],
-            'tipo' => $datos['tipo'],
-            'descripcion' => $datos['descripcion'],
-            'nivel_riesgo' => $datos['nivel_riesgo']
-        ]);
-        if (!$observacionId) {
-            error_log('No se pudo guardar la observación asociada a la alerta directa');
-        }
-
         echo json_encode([
             'success' => true,
-            'message' => 'Alerta creada correctamente'
+            'message' => 'Alerta creada correctamente y sincronizada con observaciones',
+            'data' => $resultado
         ]);
+        exit;
     } else {
-        throw new Exception('Error al crear la alerta en la base de datos');
+        throw new Exception('Error al crear la alerta sincronizada');
     }
 
 } catch (Exception $e) {

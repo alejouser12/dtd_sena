@@ -330,17 +330,71 @@ class AprendizDAO extends BaseDatos
      */
     public function obtenerObservaciones($aprendizId)
     {
-        $sql = "SELECT 
-                    o.*,
-                    i.NOMBRES as instructor_nombres,
-                    i.APELLIDOS as instructor_apellidos
-                FROM observacion_academica o
-                LEFT JOIN instructor i ON o.INSTRUCTOR_ID = i.INSTRUCTOR_ID
-                WHERE o.ESTUDIANTE_ID = :id
-                ORDER BY o.FECHA DESC
+        $sql = "SELECT *
+                FROM (
+                    SELECT
+                        CONCAT('OBS-', o.OBSERVACION_ID) AS REGISTRO_ID,
+                        'observacion' AS ORIGEN,
+                        o.OBSERVACION_ID,
+                        o.TIPO,
+                        o.DESCRIPCION,
+                        o.NIVEL_RIESGO,
+                        o.FECHA,
+                        i.NOMBRES AS instructor_nombres,
+                        i.APELLIDOS AS instructor_apellidos
+                    FROM observacion_academica o
+                    LEFT JOIN instructor i ON o.INSTRUCTOR_ID = i.INSTRUCTOR_ID
+                    WHERE o.ESTUDIANTE_ID = :id_observaciones
+
+                    UNION ALL
+
+                    SELECT
+                        CONCAT('ALT-', a.ALERTA_ID) AS REGISTRO_ID,
+                        'alerta' AS ORIGEN,
+                        NULL AS OBSERVACION_ID,
+                        COALESCE(o.TIPO, 'Alerta') AS TIPO,
+                        a.DESCRIPCION,
+                        a.NIVEL AS NIVEL_RIESGO,
+                        a.FECHA_GENERACION AS FECHA,
+                        COALESCE(i.NOMBRES, 'Sistema') AS instructor_nombres,
+                        i.APELLIDOS AS instructor_apellidos
+                    FROM alerta a
+                    LEFT JOIN observacion_academica o ON o.OBSERVACION_ID = (
+                        SELECT o2.OBSERVACION_ID
+                        FROM observacion_academica o2
+                        WHERE o2.ESTUDIANTE_ID = a.ESTUDIANTE_ID
+                          AND (
+                                (
+                                    o2.DESCRIPCION = a.DESCRIPCION
+                                    AND o2.NIVEL_RIESGO = a.NIVEL
+                                    AND ABS(TIMESTAMPDIFF(SECOND, o2.FECHA, a.FECHA_GENERACION)) <= 5
+                                )
+                                OR DATE(o2.FECHA) = DATE(a.FECHA_GENERACION)
+                          )
+                        ORDER BY
+                            CASE
+                                WHEN o2.DESCRIPCION = a.DESCRIPCION
+                                     AND o2.NIVEL_RIESGO = a.NIVEL
+                                     AND ABS(TIMESTAMPDIFF(SECOND, o2.FECHA, a.FECHA_GENERACION)) <= 5
+                                THEN 0
+                                ELSE 1
+                            END,
+                            ABS(TIMESTAMPDIFF(SECOND, o2.FECHA, a.FECHA_GENERACION)),
+                            o2.OBSERVACION_ID DESC
+                        LIMIT 1
+                    )
+                    LEFT JOIN instructor i ON o.INSTRUCTOR_ID = i.INSTRUCTOR_ID
+                    WHERE a.ESTUDIANTE_ID = :id_alertas
+                      AND a.ESTADO = 'Activa'
+                      AND o.OBSERVACION_ID IS NULL
+                ) AS historial
+                ORDER BY FECHA DESC
                 LIMIT 20";
 
-        $stmt = $this->ejecutarPreparado($sql, [':id' => $aprendizId]);
+        $stmt = $this->ejecutarPreparado($sql, [
+            ':id_observaciones' => $aprendizId,
+            ':id_alertas' => $aprendizId
+        ]);
         if ($stmt) {
             return $stmt->fetchAll();
         }

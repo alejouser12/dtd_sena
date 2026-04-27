@@ -12,78 +12,19 @@ class AlertaDAO extends BaseDatos
 
     public function crearAlertaDesdeObservacion($observacion, $observacion_id = null)
     {
-        
-        $regla_id = $this->obtenerReglaId();
-
-     
-        $sql = "INSERT INTO alerta (
-                    ESTUDIANTE_ID,
-                    REGLA_ID,
-                    NIVEL,
-                    DESCRIPCION,
-                    ESTADO,
-                    FECHA_GENERACION
-                ) VALUES (
-                    :estudiante_id,
-                    :regla_id,
-                    :nivel,
-                    :descripcion,
-                    'Activa',
-                    NOW()
-                )";
-
-        $stmt = $this->ejecutarPreparado($sql, [
-            ':estudiante_id' => $observacion['estudiante_id'],
-            ':regla_id' => $regla_id,
-            ':nivel' => $observacion['nivel_riesgo'],
-            ':descripcion' => 'Observación: ' . $observacion['descripcion']
-        ]);
-
-        return $stmt ? true : false;
+        require_once __DIR__ . '/SeguimientoDAO.php';
+        $seguimientoDAO = new SeguimientoDAO();
+        $resultado = $seguimientoDAO->registrarDesdeObservacion($observacion);
+        return $resultado !== false;
     }
 
 
     public function crearAlertaDirecta($datos)
     {
-
-        $regla_id = $this->obtenerReglaId();
-
-        $sql = "INSERT INTO alerta (
-                    ESTUDIANTE_ID,
-                    REGLA_ID,
-                    NIVEL,
-                    DESCRIPCION,
-                    ESTADO,
-                    FECHA_GENERACION
-                ) VALUES (
-                    :estudiante_id,
-                    :regla_id,
-                    :nivel,
-                    :descripcion,
-                    'Activa',
-                    NOW()
-                )";
-
-        $tipo = isset($datos['tipo']) ? trim($datos['tipo']) : '';
-        $desc = $tipo !== '' ? ('[' . $tipo . '] ' . $datos['descripcion']) : $datos['descripcion'];
-
-        $stmt = $this->ejecutarPreparado($sql, [
-            ':estudiante_id' => $datos['estudiante_id'],
-            ':regla_id' => $regla_id,
-            ':nivel' => $datos['nivel_riesgo'],
-            ':descripcion' => $desc
-        ]);
-
-        if (!$stmt) {
-            error_log("Error en crearAlertaDirecta: " . $this->imprimirError());
-            return false;
-        }
-
-        require_once __DIR__ . '/AprendizDAO.php';
-        $apDao = new AprendizDAO();
-        $apDao->refrescarNivelRiesgoProgreso((int)$datos['estudiante_id']);
-
-        return true;
+        require_once __DIR__ . '/SeguimientoDAO.php';
+        $seguimientoDAO = new SeguimientoDAO();
+        $resultado = $seguimientoDAO->registrarDesdeAlerta($datos);
+        return $resultado !== false;
     }
 
 
@@ -124,16 +65,38 @@ class AlertaDAO extends BaseDatos
                     ap.APRENDIZ_ID,
                     r.NOMBRE_REGLA,
                     r.TIPO_REGLA,
+                    o.TIPO as TIPO_OBSERVACION,
                     i.NOMBRES as instructor_nombres,
                     i.APELLIDOS as instructor_apellidos
                 FROM alerta a
                 INNER JOIN aprendiz ap ON a.ESTUDIANTE_ID = ap.APRENDIZ_ID
                 LEFT JOIN parametro_regla r ON a.REGLA_ID = r.REGLA_ID
-                LEFT JOIN observacion_academica o ON o.ESTUDIANTE_ID = a.ESTUDIANTE_ID 
-                    AND DATE(o.FECHA) = DATE(a.FECHA_GENERACION)
+                LEFT JOIN observacion_academica o ON o.OBSERVACION_ID = (
+                    SELECT o2.OBSERVACION_ID
+                    FROM observacion_academica o2
+                    WHERE o2.ESTUDIANTE_ID = a.ESTUDIANTE_ID
+                      AND (
+                            (
+                                o2.DESCRIPCION = a.DESCRIPCION
+                                AND o2.NIVEL_RIESGO = a.NIVEL
+                                AND ABS(TIMESTAMPDIFF(SECOND, o2.FECHA, a.FECHA_GENERACION)) <= 5
+                            )
+                            OR DATE(o2.FECHA) = DATE(a.FECHA_GENERACION)
+                      )
+                    ORDER BY
+                        CASE
+                            WHEN o2.DESCRIPCION = a.DESCRIPCION
+                                 AND o2.NIVEL_RIESGO = a.NIVEL
+                                 AND ABS(TIMESTAMPDIFF(SECOND, o2.FECHA, a.FECHA_GENERACION)) <= 5
+                            THEN 0
+                            ELSE 1
+                        END,
+                        ABS(TIMESTAMPDIFF(SECOND, o2.FECHA, a.FECHA_GENERACION)),
+                        o2.OBSERVACION_ID DESC
+                    LIMIT 1
+                )
                 LEFT JOIN instructor i ON o.INSTRUCTOR_ID = i.INSTRUCTOR_ID
                 WHERE a.ESTADO = 'Activa'
-                GROUP BY a.ALERTA_ID
                 ORDER BY a.FECHA_GENERACION DESC
                 LIMIT 50";
 

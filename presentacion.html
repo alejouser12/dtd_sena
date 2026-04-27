@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presentación DTD_SENA</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --verde: #39a900;
+  --verde2: #2d8a00;
+  --amarillo: #f9e000;
+  --oscuro: #1a2410;
+  --blanco: #ffffff;
+}
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Nunito', sans-serif;
+  background: var(--oscuro);
+  color: var(--blanco);
+}
+.slide {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  position: relative;
+}
+.slide-number {
+  position: absolute;
+  bottom: 30px;
+  right: 40px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.4);
+}
+
+/* Portada */
+.slide-portada {
+  background: linear-gradient(135deg, #0d2b00 0%, #1e5c00 50%, #39a900 100%);
+  text-align: center;
+}
+.slide-portada::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.badge {
+  background: var(--amarillo);
+  color: var(--oscuro);
+  font-weight: 800;
+  font-size: 0.9rem;
+  padding: 10px 28px;
+  border-radius: 100px;
+  letter-spacing: 2px;
+  margin-bottom: 40px;
+  display: inline-block;
+}
+.slide-portada h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(5rem, 15vw, 10rem);
+  color: var(--blanco);
+  line-height: 0.85;
+  letter-spacing: 4px;
+}
+.slide-portada h1 span { color: var(--amarillo); }
+.slide-portada .subtitulo {
+  font-size: 1.8rem;
+  color: rgba(255,255,255,0.8);
+  margin-top: 20px;
+  font-weight: 600;
+}
+.slide-portada .año {
+  font-size: 1.2rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 30px;
+}
+
+/* Imagen principal */
+.img-principal {
+  width: 100%;
+  max-width: 600px;
+  height: 350px;
+  background: rgba(255,255,255,0.1);
+  border: 3px dashed rgba(255,255,255,0.3);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 40px;
+  color: rgba(255,255,255,0.5);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Slides oscuros */
+.slide-dark {
+  background: linear-gradient(180deg, #0d2b00 0%, #1a2410 100%);
+}
+.slide-dark h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(3rem, 8vw, 5rem);
+  color: var(--amarillo);
+  letter-spacing: 3px;
+  margin-bottom: 50px;
+  text-align: center;
+}
+.slide-dark h3 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--verde);
+  margin-bottom: 30px;
+  text-align: center;
+}
+.slide-dark p {
+  font-size: 1.3rem;
+  line-height: 1.8;
+  color: rgba(255,255,255,0.85);
+  max-width: 900px;
+  text-align: center;
+}
+.slide-dark ul {
+  text-align: left;
+  display: inline-block;
+  list-style: none;
+  max-width: 800px;
+}
+.slide-dark li {
+  font-size: 1.3rem;
+  padding: 15px 0 15px 50px;
+  position: relative;
+  color: rgba(255,255,255,0.85);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.slide-dark li::before {
+  content: '●';
+  position: absolute;
+  left: 0;
+  color: var(--amarillo);
+  font-size: 0.8rem;
+}
+
+/* Slides con tabla */
+.slide-table {
+  background: linear-gradient(180deg, #0d2b00 0%, #1a2410 100%);
+}
+.slide-table h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(3rem, 8vw, 5rem);
+  color: var(--amarillo);
+  letter-spacing: 3px;
+  margin-bottom: 50px;
+  text-align: center;
+}
+.table-box {
+  background: rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 1000px;
+  width: 100%;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  padding: 18px 24px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+th {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--amarillo);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+td {
+  font-size: 1.1rem;
+  color: rgba(255,255,255,0.85);
+}
+tr:last-child td { border-bottom: none; }
+
+/* Slides con tarjetas */
+.slide-cards {
+  background: linear-gradient(180deg, #0d2b00 0%, #1a2410 100%);
+}
+.slide-cards h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(3rem, 8vw, 5rem);
+  color: var(--amarillo);
+  letter-spacing: 3px;
+  margin-bottom: 50px;
+  text-align: center;
+}
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  max-width: 1100px;
+  width: 100%;
+}
+.card {
+  background: rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 30px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: 0.3s;
+}
+.card:hover {
+  background: rgba(255,255,255,0.12);
+  transform: translateY(-5px);
+}
+.card-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+.card h4 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--amarillo);
+  margin-bottom: 12px;
+}
+.card p {
+  font-size: 1.05rem;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.6;
+}
+
+/* Imagen para tarjetas */
+.card-img {
+  width: 100%;
+  height: 120px;
+  background: rgba(255,255,255,0.1);
+  border: 2px dashed rgba(255,255,255,0.3);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.9rem;
+}
+
+/* Slide de flujo */
+.slide-flujo {
+  background: linear-gradient(180deg, #0d2b00 0%, #1a2410 100%);
+}
+.slide-flujo h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(3rem, 8vw, 5rem);
+  color: var(--amarillo);
+  letter-spacing: 3px;
+  margin-bottom: 50px;
+  text-align: center;
+}
+.flujo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 900px;
+}
+.flujo-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.flujo-box {
+  background: var(--verde);
+  color: var(--blanco);
+  padding: 18px 32px;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  min-width: 160px;
+}
+.flujo-box.highlight {
+  background: var(--amarillo);
+  color: var(--oscuro);
+}
+.flujo-arrow {
+  color: var(--amarillo);
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+/* Slide final */
+.slide-final {
+  background: linear-gradient(135deg, #0d2b00 0%, #1e5c00 50%, #39a900 100%);
+  text-align: center;
+}
+.slide-final h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(4rem, 10vw, 6rem);
+  color: var(--blanco);
+  letter-spacing: 3px;
+}
+.slide-final p {
+  font-size: 1.5rem;
+  color: rgba(255,255,255,0.8);
+  margin-top: 20px;
+}
+.slide-final .img-final {
+  width: 100%;
+  max-width: 500px;
+  height: 300px;
+  background: rgba(255,255,255,0.1);
+  border: 3px dashed rgba(255,255,255,0.3);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 40px auto;
+  color: rgba(255,255,255,0.5);
+  font-size: 1.2rem;
+}
+</style>
+</head>
+<body>
+
+<!-- Slide 1: Portada -->
+<div class="slide slide-portada">
+  <div class="badge">DTD SENA 2026</div>
+  <h1>DTD <span>SENA</span></h1>
+  <p class="subtitulo">Sistema de Detección Temprana de Deserción</p>
+  <p class="año">Servicio Nacional de Aprendizaje</p>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">1</div>
+</div>
+
+<!-- Slide 2: Introducción -->
+<div class="slide slide-dark">
+  <h2>INTRODUCCIÓN</h2>
+  <h3>¿Qué es DTD_SENA?</h3>
+  <p>Es un sistema integral diseñado para identificar y prevenir la deserción de aprendices del SENA mediante intervención temprana.</p>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">2</div>
+</div>
+
+<!-- Slide 3: Objetivos -->
+<div class="slide slide-dark">
+  <h2>OBJETIVOS</h2>
+  <ul>
+    <li>Identificar aprendices con riesgo de desertar</li>
+    <li>Monitorear la asistencia diaria</li>
+    <li>Registrar evidencias de aprendizaje</li>
+    <li>Generar alertas automáticas</li>
+    <li>Facilitar el seguimiento por instructores</li>
+    <li>Centralizar la información de aprendices</li>
+  </ul>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">3</div>
+</div>
+
+<!-- Slide 4: Arquitectura -->
+<div class="slide slide-table">
+  <h2>ARQUITECTURA</h2>
+  <div class="table-box">
+    <table>
+      <tr>
+        <th>Componente</th>
+        <th>Tecnología</th>
+      </tr>
+      <tr>
+        <td>Frontend</td>
+        <td>HTML5, CSS3, JavaScript</td>
+      </tr>
+      <tr>
+        <td>Backend</td>
+        <td>PHP</td>
+      </tr>
+      <tr>
+        <td>Base de Datos</td>
+        <td>MySQL (XAMPP)</td>
+      </tr>
+      <tr>
+        <td>UI</td>
+        <td>SweetAlerts, diseño responsivo</td>
+      </tr>
+    </table>
+  </div>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">4</div>
+</div>
+
+<!-- Slide 5: Estructura -->
+<div class="slide slide-table">
+  <h2>ESTRUCTURA</h2>
+  <div class="table-box">
+    <table>
+      <tr>
+        <th>Carpeta</th>
+        <th>Contenido</th>
+      </tr>
+      <tr>
+        <td>index.php</td>
+        <td>Página principal</td>
+      </tr>
+      <tr>
+        <td>login.php</td>
+        <td>Autenticación</td>
+      </tr>
+      <tr>
+        <td>config/</td>
+        <td>Configuraciones globales</td>
+      </tr>
+      <tr>
+        <td>conexion/</td>
+        <td>DAOs (Capa de datos)</td>
+      </tr>
+      <tr>
+        <td>mod/</td>
+        <td>Módulos de la aplicación</td>
+      </tr>
+      <tr>
+        <td>css/ js/</td>
+        <td>Estilos y scripts</td>
+      </tr>
+    </table>
+  </div>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">5</div>
+</div>
+
+<!-- Slide 6: Módulos -->
+<div class="slide slide-cards">
+  <h2>MÓDULOS PRINCIPALES</h2>
+  <div class="cards-grid">
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">👥</div>
+      <h4>Aprendices</h4>
+      <p>Gestión completa de aprendices</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📋</div>
+      <h4>Fichas</h4>
+      <p>Gestión de cohortes</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">👨‍🏫</div>
+      <h4>Instructores</h4>
+      <p>Administración de instructores</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">🏢</div>
+      <h4>Centros</h4>
+      <p>Centros de formación</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">🗺️</div>
+      <h4>Regionales</h4>
+      <p>Regionales SENA</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📚</div>
+      <h4>Programas</h4>
+      <p>Programas de formación</p>
+    </div>
+  </div>
+  <div class="slide-number">6</div>
+</div>
+
+<!-- Slide 7: Asistencia -->
+<div class="slide slide-cards">
+  <h2>ASISTENCIA Y EVIDENCIAS</h2>
+  <div class="cards-grid">
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">✅</div>
+      <h4>Asistencia</h4>
+      <p>Registro y monitoreo</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📎</div>
+      <h4>Evidencias</h4>
+      <p>Gestión de evidencias</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📝</div>
+      <h4>Calificación</h4>
+      <p>Sistema de calificación</p>
+    </div>
+  </div>
+  <div class="slide-number">7</div>
+</div>
+
+<!-- Slide 8: Alertas -->
+<div class="slide slide-cards">
+  <h2>ALERTAS Y NOTIFICACIONES</h2>
+  <div class="cards-grid">
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">🔔</div>
+      <h4>Alertas</h4>
+      <p>Panel de alertas</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📨</div>
+      <h4>Notificaciones</h4>
+      <p>En tiempo real</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">✓</div>
+      <h4>Gestión</h4>
+      <p>Marcar como vistas</p>
+    </div>
+  </div>
+  <div class="slide-number">8</div>
+</div>
+
+<!-- Slide 9: CRUD -->
+<div class="slide slide-table">
+  <h2>OPERACIONES CRUD</h2>
+  <div class="table-box">
+    <table>
+      <tr>
+        <th>Entidad</th>
+        <th>Crear</th>
+        <th>Editar</th>
+        <th>Eliminar</th>
+      </tr>
+      <tr>
+        <td>Aprendiz</td>
+        <td>✓</td>
+        <td>✓</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Ficha</td>
+        <td>✓</td>
+        <td>✓</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Instructor</td>
+        <td>✓</td>
+        <td>✓</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Centro</td>
+        <td>✓</td>
+        <td>✓</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Regional</td>
+        <td>✓</td>
+        <td>✓</td>
+        <td>✓</td>
+      </tr>
+      <tr>
+        <td>Programa</td>
+        <td>✓</td>
+        <td>✓</td>
+        <td>✓</td>
+      </tr>
+    </table>
+  </div>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">9</div>
+</div>
+
+<!-- Slide 10: Autenticación -->
+<div class="slide slide-dark">
+  <h2>AUTENTICACIÓN</h2>
+  <ul>
+    <li>Login con validación de usuarios</li>
+    <li>Generación de hash para seguridad</li>
+    <li>Gestión de permisos por rol</li>
+    <li>Cierre de sesión seguro</li>
+    <li>Perfil de usuario personalizable</li>
+  </ul>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">10</div>
+</div>
+
+<!-- Slide 11: JavaScript -->
+<div class="slide slide-table">
+  <h2>JAVASCRIPT</h2>
+  <div class="table-box">
+    <table>
+      <tr>
+        <th>Archivo</th>
+        <th>Funcionalidad</th>
+      </tr>
+      <tr>
+        <td>login.js</td>
+        <td>Lógica de autenticación</td>
+      </tr>
+      <tr>
+        <td>menu.js</td>
+        <td>Navegación</td>
+      </tr>
+      <tr>
+        <td>notificaciones.js</td>
+        <td>Sistema de notificaciones</td>
+      </tr>
+      <tr>
+        <td>sweetalerts.js</td>
+        <td>Alertas interactivas</td>
+      </tr>
+      <tr>
+        <td>tema.js</td>
+        <td>Gestión de temas</td>
+      </tr>
+    </table>
+  </div>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">11</div>
+</div>
+
+<!-- Slide 12: Flujo -->
+<div class="slide slide-flujo">
+  <h2>DIAGRAMA DE FLUJO</h2>
+  <div class="flujo-container">
+    <div class="flujo-row">
+      <div class="flujo-box">Usuario</div>
+      <span class="flujo-arrow">→</span>
+      <div class="flujo-box">Login</div>
+      <span class="flujo-arrow">→</span>
+      <div class="flujo-box highlight">Menú</div>
+    </div>
+    <div class="flujo-row">
+      <div class="flujo-box">Aprendices</div>
+      <div class="flujo-box">Fichas</div>
+      <div class="flujo-box">Instructores</div>
+    </div>
+    <div class="flujo-row">
+      <div class="flujo-box">Centros</div>
+      <div class="flujo-box">Regionales</div>
+      <div class="flujo-box">Programas</div>
+    </div>
+    <div class="flujo-row">
+      <div class="flujo-box">Evidencias</div>
+      <div class="flujo-box">Asistencia</div>
+      <div class="flujo-box">Alertas</div>
+    </div>
+  </div>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">12</div>
+</div>
+
+<!-- Slide 13: Beneficios -->
+<div class="slide slide-cards">
+  <h2>BENEFICIOS</h2>
+  <div class="cards-grid">
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">🎯</div>
+      <h4>Detección Temprana</h4>
+      <p>Identifica riesgos a tiempo</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📊</div>
+      <h4>Centralización</h4>
+      <p>Información unificada</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">💻</div>
+      <h4>Interfaz Intuitiva</h4>
+      <p>Fácil de usar</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">🔔</div>
+      <h4>Notificaciones</h4>
+      <p>Tiempo real</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📱</div>
+      <h4>Responsivo</h4>
+      <p>Multi dispositivo</p>
+    </div>
+    <div class="card">
+      <!-- ESPACIO PARA IMAGEN -->
+      <div class="card-img">📷 [IMAGEN]</div>
+      <div class="card-icon">📜</div>
+      <h4>Historial</h4>
+      <p>Seguimiento completo</p>
+    </div>
+  </div>
+  <div class="slide-number">13</div>
+</div>
+
+<!-- Slide 14: Requisitos -->
+<div class="slide slide-dark">
+  <h2>REQUISITOS</h2>
+  <ul>
+    <li>Servidor web (XAMPP, WAMP)</li>
+    <li>PHP 7.4+</li>
+    <li>MySQL 5.7+</li>
+    <li>Navegador moderno</li>
+  </ul>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-principal">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">14</div>
+</div>
+
+<!-- Slide 15: Final -->
+<div class="slide slide-final">
+  <h2>¡GRACIAS!</h2>
+  <p>DTD_SENA - Detección Temprana de Deserción</p>
+  <p>SENA 2026</p>
+  
+  <!-- ESPACIO PARA IMAGEN/GIF -->
+  <div class="img-final">
+    📷 [PEGAR IMAGEN O GIF AQUÍ]
+  </div>
+  
+  <div class="slide-number">15</div>
+</div>
+
+</body>
+</html>

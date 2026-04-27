@@ -3,15 +3,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Determinar la ruta base para redirigir al login
-$base_path = '';
-if (strpos($_SERVER['REQUEST_URI'], '/mod/') !== false) {
-    $base_path = '../';
-}
+require_once __DIR__ . '/app.php';
 
 if (!isset($_SESSION['usuario_id'])) {
-    header('Location: ' . $base_path . 'login.php');
-    exit;
+    redirect_to('login.php');
 }
 
 // Cargar funciones de permisos

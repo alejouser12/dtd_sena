@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../conexion/AprendizDAO.php';
 require_once __DIR__ . '/../conexion/ObservacionDAO.php';
 require_once __DIR__ . '/../conexion/AsistenciaDAO.php';
@@ -13,14 +14,12 @@ $asistenciaDAO = new AsistenciaDAO();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) {
-    header('Location: aprendices.php');
-    exit;
+    redirect_to('mod/aprendices.php');
 }
 
 $aprendiz = $dao->obtenerPorId($id);
 if (!$aprendiz) {
-    header('Location: aprendices.php');
-    exit;
+    redirect_to('mod/aprendices.php');
 }
 
 $tiposObservacion = $observacionDAO->obtenerTipos();
@@ -49,8 +48,8 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($aprendiz['NOMBRES'] . ' ' . $aprendiz['APELLIDOS']) ?> - Aprendiz</title>
-    <link rel="stylesheet" href="css/aprendiz_detalle.css">
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(asset_url('mod/css/aprendiz_detalle.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(asset_url('css/style.css')) ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -218,14 +217,14 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
 </head>
 <body>
     <div id="loader">
-        <img src="../img/logo_sena_verde.png" alt="Logo SENA" id="loader-logo">
+        <img src="<?= htmlspecialchars(asset_url('img/logo_sena_verde.png')) ?>" alt="Logo SENA" id="loader-logo">
     </div>
 
-    <?php include "../config/header.php"; ?>
+    <?php include __DIR__ . '/../config/header.php'; ?>
 
     <main class="container" id="contenido-principal" style="display:none; opacity:0;">
         <div class="table-controls" style="justify-content: flex-start; margin-bottom: 20px;">
-            <a href="aprendices.php" class="btn-view-all">
+            <a href="<?= htmlspecialchars(app_url('mod/aprendices.php')) ?>" class="btn-view-all">
                 <i class="fas fa-arrow-left"></i> Volver a aprendices
             </a>
         </div>
@@ -295,7 +294,7 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
 
         <?php if (!empty($aprendiz['FICHA_ID'])): ?>
         <div class="cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin: 30px 0;">
-            <div class="card" onclick="window.location.href='ficha_detalle.php?id=<?= $aprendiz['FICHA_ID'] ?>'">
+            <div class="card" onclick="window.location.href='<?= htmlspecialchars(app_url('mod/ficha_detalle.php?id=' . (int)$aprendiz['FICHA_ID'])) ?>'">
                 <a href="javascript:void(0)" style="text-decoration: none; color: inherit;">
                     <div class="card-icon"><i class="fas fa-layer-group"></i></div>
                     <h3 class="card-title"><?= htmlspecialchars($aprendiz['CODIGO_FICHA']) ?></h3>
@@ -303,7 +302,7 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
                 </a>
             </div>
             <?php if (!empty($aprendiz['PROGRAMA_ID'])): ?>
-            <div class="card" onclick="window.location.href='programa_detalle.php?id=<?= $aprendiz['PROGRAMA_ID'] ?>'">
+            <div class="card" onclick="window.location.href='<?= htmlspecialchars(app_url('mod/programa_detalle.php?id=' . (int)$aprendiz['PROGRAMA_ID'])) ?>'">
                 <a href="javascript:void(0)" style="text-decoration: none; color: inherit;">
                     <div class="card-icon"><i class="fas fa-book"></i></div>
                     <h3 class="card-title"><?= htmlspecialchars($aprendiz['programa_nombre']) ?></h3>
@@ -442,7 +441,7 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
 
         <!-- SECCIÓN DE OBSERVACIONES -->
         <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-top: 40px;">
-            <h2><i class="fas fa-clipboard-list"></i> Observaciones Académicas</h2>
+            <h2><i class="fas fa-clipboard-list"></i> Seguimiento Académico</h2>
             <?php if (esInstructor() || esAdmin()): ?>
             <button class="btn-create" onclick="abrirModalObservacion()">
                 <i class="fas fa-plus"></i> Nueva Observación
@@ -458,7 +457,7 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
                 </div>
                 <form id="formObservacion">
                     <input type="hidden" name="estudiante_id" value="<?= $aprendiz['APRENDIZ_ID'] ?>">
-                    <input type="hidden" name="instructor_id" value="<?= $_SESSION['usuario_ref_id'] ?? 1 ?>">
+                    <input type="hidden" name="instructor_id" value="<?= (int)($_SESSION['usuario_ref_id'] ?? 0) ?>">
                     
                     <div class="form-group">
                         <label for="tipo">Tipo de Observación *</label>
@@ -505,15 +504,20 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
                 <?php foreach ($observaciones as $obs): ?>
                 <div class="content-card">
                     <div class="card-header" style="padding: 15px 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; flex-wrap: wrap;">
                             <span style="font-weight: 600;"><?= htmlspecialchars($obs['TIPO'] ?? 'General') ?></span>
-                            <span class="badge"><?= date('d/m/Y H:i', strtotime($obs['FECHA'])) ?></span>
+                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                <?php if (($obs['ORIGEN'] ?? 'observacion') === 'alerta'): ?>
+                                    <span class="badge">Alerta</span>
+                                <?php endif; ?>
+                                <span class="badge"><?= date('d/m/Y H:i', strtotime($obs['FECHA'])) ?></span>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body" style="padding: 20px;">
                         <p><?= nl2br(htmlspecialchars($obs['DESCRIPCION'])) ?></p>
                         <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-                            <span><i class="fas fa-user-tie"></i> <?= htmlspecialchars($obs['instructor_nombres'] ?? 'Instructor') ?></span>
+                            <span><i class="fas fa-user-tie"></i> <?= htmlspecialchars(trim(($obs['instructor_nombres'] ?? 'Instructor') . ' ' . ($obs['instructor_apellidos'] ?? ''))) ?></span>
                             <span class="<?= strtolower($obs['NIVEL_RIESGO'] ?? 'bajo') == 'alto' ? 'riesgo-alto' : (strtolower($obs['NIVEL_RIESGO'] ?? 'bajo') == 'medio' ? 'riesgo-medio' : 'riesgo-bajo') ?>">
                                 <?= htmlspecialchars($obs['NIVEL_RIESGO'] ?? 'Bajo') ?>
                             </span>
@@ -526,7 +530,7 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
 
         <?php if (esAdmin()): ?>
         <div style="display: flex; gap: 15px; justify-content: center; margin-top: 30px;">
-            <a href="crud/editar_aprendiz.php?id=<?= $aprendiz['APRENDIZ_ID'] ?>" class="btn-create">
+            <a href="<?= htmlspecialchars(app_url('mod/crud/editar_aprendiz.php?id=' . (int)$aprendiz['APRENDIZ_ID'])) ?>" class="btn-create">
                 <i class="fas fa-edit"></i> Editar aprendiz
             </a>
             <a href="#" class="btn-cancel" onclick="confirmarEliminacion(<?= $aprendiz['APRENDIZ_ID'] ?>)">
@@ -536,15 +540,15 @@ $iniciales = strtoupper(substr($aprendiz['NOMBRES'], 0, 1) . substr($aprendiz['A
         <?php endif; ?>
     </main>
 
-    <?php include "../config/footer.php"; ?>
+    <?php include __DIR__ . '/../config/footer.php'; ?>
 
-    <script src="../js/tema.js"></script>
-    <script src="../js/loader.js"></script>
-    <script src="../js/panel_menu.js"></script>
-    <script src="../js/dropdowns.js"></script>
-    <script src="../js/profile_menu.js"></script>
-    <script src="../js/sweetalerts.js"></script>
-    <script src="../js/menu.js"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/tema.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/loader.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/panel_menu.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/dropdowns.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/profile_menu.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/sweetalerts.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(asset_url('js/menu.js')) ?>"></script>
 
     <script>
         function abrirModalObservacion() {
