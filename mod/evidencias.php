@@ -3,9 +3,34 @@
 session_start();
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../conexion/EvidenciaDAO.php';
+require_once __DIR__ . '/../conexion/RegionalDAO.php';
+require_once __DIR__ . '/../conexion/CentroDAO.php';
 
 $dao = new EvidenciaDAO();
-$evidencias = $dao->obtenerTodas();
+$regionalDAO = new RegionalDAO();
+$centroDAO = new CentroDAO();
+
+$rol = $_SESSION['rol'] ?? 'aprendiz';
+$usuarioId = $_SESSION['usuario_id'] ?? null;
+
+// Filtros (solo para admin)
+$regionalId = isset($_GET['regional_id']) ? (int)$_GET['regional_id'] : null;
+$centroId   = isset($_GET['centro_id']) ? (int)$_GET['centro_id'] : null;
+
+$regionales = [];
+$centros = [];
+if (esAdmin()) {
+    $regionales = $regionalDAO->obtenerTodas();
+    if ($regionalId) {
+        $centros = $centroDAO->obtenerPorRegional($regionalId);
+    }
+}
+
+// Obtener evidencias según rol y filtros
+$evidencias = $dao->obtenerEvidenciasConFiltros($rol, $usuarioId, $regionalId, $centroId);
+
+// (Opcional) Log de depuración
+// error_log("Rol: $rol, Usuario: $usuarioId, Regional: $regionalId, Centro: $centroId, Evidencias: " . count($evidencias));
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -17,6 +42,23 @@ $evidencias = $dao->obtenerTodas();
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .filtros {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .filtros .form-group {
+            margin: 0;
+        }
+        .filtros select, .filtros button {
+            padding: 8px 15px;
+        }
+        .estado-badge.activa { background: #dcfce7; color: #16a34a; }
+        .estado-badge.inactiva { background: #fee2e2; color: #dc2626; }
+    </style>
 </head>
 <body>
     <div id="loader">
@@ -26,7 +68,7 @@ $evidencias = $dao->obtenerTodas();
     <?php include "../config/header.php"; ?>
 
     <main class="container" id="contenido-principal" style="display:none; opacity:0;">
-        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div>
                 <h1 class="page-title">
                     <i class="fas fa-file-alt"></i> Gestión de Evidencias
@@ -40,6 +82,38 @@ $evidencias = $dao->obtenerTodas();
             <?php endif; ?>
         </div>
 
+        <!-- Filtros solo visibles para admin -->
+        <?php if (esAdmin()): ?>
+        <div class="filtros">
+            <div class="form-group">
+                <label for="regional_id">Regional</label>
+                <select name="regional_id" id="regional_id" class="form-control">
+                    <option value="">Todas las regionales</option>
+                    <?php foreach ($regionales as $reg): ?>
+                        <option value="<?= $reg['REGIONAL_ID'] ?>" <?= ($regionalId == $reg['REGIONAL_ID']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($reg['NOMBRE']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="centro_id">Centro</label>
+                <select name="centro_id" id="centro_id" class="form-control">
+                    <option value="">Todos los centros</option>
+                    <?php foreach ($centros as $cent): ?>
+                        <option value="<?= $cent['CENTRO_ID'] ?>" <?= ($centroId == $cent['CENTRO_ID']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($cent['NOMBRE']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group">
+                <button type="button" id="btn-filtrar" class="btn-action">Filtrar</button>
+                <button type="button" id="btn-limpiar" class="btn-cancel">Limpiar</button>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="table-container">
             <table class="data-table">
                 <thead>
@@ -48,8 +122,9 @@ $evidencias = $dao->obtenerTodas();
                         <th>Tipo</th>
                         <th>%</th>
                         <th>Fecha</th>
-                        <th>Tiempo entrega</th>
+                        <th>Entrega</th>
                         <th>Ficha</th>
+                        <th>Regional / Centro</th>
                         <th>Estado</th>
                         <th>Acciones</th>
                         <?php if (esAdmin()): ?>
@@ -60,7 +135,7 @@ $evidencias = $dao->obtenerTodas();
                 <tbody>
                     <?php if (empty($evidencias)): ?>
                     <tr>
-                        <td colspan="<?= esAdmin() ? 9 : 8 ?>" class="empty-state">
+                        <td colspan="<?= esAdmin() ? 10 : 9 ?>" class="empty-state">
                             <i class="fas fa-file"></i> No hay evidencias registradas
                         </td>
                     </tr>
@@ -74,6 +149,10 @@ $evidencias = $dao->obtenerTodas();
                             <td><?= date('d/m/Y', strtotime($e['tiempo_entrega'])) ?></td>
                             <td><?= htmlspecialchars($e['CODIGO_FICHA']) ?></td>
                             <td>
+                                <?= htmlspecialchars($e['regional_nombre'] ?? '-') ?> /
+                                <?= htmlspecialchars($e['centro_nombre'] ?? '-') ?>
+                            </td>
+                            <td>
                                 <span class="estado-badge <?= $e['estado_evidencia'] ?>">
                                     <?= ucfirst($e['estado_evidencia']) ?>
                                 </span>
@@ -86,7 +165,7 @@ $evidencias = $dao->obtenerTodas();
                             <?php if (esAdmin()): ?>
                             <td>
                                 <div style="display: flex; gap: 5px;">
-                                    <a href="editar_evidencia.php?id=<?= $e['evidencias_id'] ?>" class="btn-edit" title="Editar">
+                                    <a href="crud/editar_evidencia.php?id=<?= $e['evidencias_id'] ?>" class="btn-edit" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     <a href="#" class="btn-delete" title="Eliminar" onclick="confirmarEliminacion(<?= $e['evidencias_id'] ?>)">
@@ -125,10 +204,24 @@ $evidencias = $dao->obtenerTodas();
                 reverseButtons: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = 'eliminar_evidencia.php?id=' + id;
+                    window.location.href = 'crud/eliminar_evidencia.php?id=' + id;
                 }
             });
         }
+
+        <?php if (esAdmin()): ?>
+        document.getElementById('btn-filtrar')?.addEventListener('click', function() {
+            const regional = document.getElementById('regional_id').value;
+            const centro = document.getElementById('centro_id').value;
+            let url = 'evidencias.php?';
+            if (regional) url += 'regional_id=' + regional;
+            if (centro) url += (regional ? '&' : '') + 'centro_id=' + centro;
+            window.location.href = url;
+        });
+        document.getElementById('btn-limpiar')?.addEventListener('click', function() {
+            window.location.href = 'evidencias.php';
+        });
+        <?php endif; ?>
 
         if (typeof initThemeToggle === 'function') {
             setTimeout(initThemeToggle, 100);

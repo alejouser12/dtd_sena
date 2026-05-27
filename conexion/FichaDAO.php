@@ -1,4 +1,5 @@
 <?php
+// conexion/FichaDAO.php
 require_once __DIR__ . "/conexion.php";
 
 class FichaDAO extends BaseDatos
@@ -8,6 +9,10 @@ class FichaDAO extends BaseDatos
     protected function actualizar() {}
     protected function eliminar() {}
 
+    /**
+     * Obtiene todas las fichas con información relacionada (programa, centro, regional, total aprendices)
+     * @return array
+     */
     public function obtenerTodas()
     {
         $sql = "SELECT 
@@ -36,6 +41,27 @@ class FichaDAO extends BaseDatos
         return [];
     }
 
+    /**
+     * Obtiene las fichas de un centro específico (útil para selects dependientes)
+     * @param int $centroId
+     * @return array
+     */
+    public function obtenerPorCentro($centroId)
+    {
+        $sql = "SELECT f.FICHA_ID, f.CODIGO_FICHA, p.NOMBRE as programa_nombre
+                FROM ficha f
+                JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
+                WHERE f.CENTRO_ID = :centroId AND f.ESTADO = 'Activa'
+                ORDER BY f.CODIGO_FICHA";
+        $stmt = $this->ejecutarPreparado($sql, [':centroId' => $centroId]);
+        return $stmt ? $stmt->fetchAll() : [];
+    }
+
+    /**
+     * Obtiene una ficha por ID con toda la información relacionada
+     * @param int $id
+     * @return array|null
+     */
     public function obtenerPorId($id)
     {
         $sql = "SELECT 
@@ -61,32 +87,36 @@ class FichaDAO extends BaseDatos
                 WHERE f.FICHA_ID = :id";
 
         $stmt = $this->ejecutarPreparado($sql, [':id' => $id]);
-        
-        if ($stmt) {
-            $ficha = $stmt->fetch();
-            
-            if ($ficha) {
-                $sqlAprendices = "SELECT COUNT(*) as total FROM aprendiz WHERE FICHA_ID = :id";
-                $stmtAprendices = $this->ejecutarPreparado($sqlAprendices, [':id' => $id]);
-                if ($stmtAprendices) {
-                    $aprendices = $stmtAprendices->fetch();
-                    $ficha['total_aprendices'] = $aprendices['total'];
-                } else {
-                    $ficha['total_aprendices'] = 0;
-                }
-                
-                $ficha['instructor_nombres'] = null;
-                $ficha['instructor_apellidos'] = null;
-                $ficha['instructor_email'] = null;
-                $ficha['instructor_especialidad'] = null;
-                $ficha['HORARIO'] = null;
-                $ficha['AULA'] = null;
-            }
-            return $ficha;
+        if (!$stmt) {
+            return null;
         }
-        return null;
+
+        $ficha = $stmt->fetch();
+        if (!$ficha) {
+            return null;
+        }
+
+        // Contar aprendices
+        $sqlAprendices = "SELECT COUNT(*) as total FROM aprendiz WHERE FICHA_ID = :id";
+        $stmtAprendices = $this->ejecutarPreparado($sqlAprendices, [':id' => $id]);
+        $ficha['total_aprendices'] = ($stmtAprendices && ($row = $stmtAprendices->fetch())) ? (int)$row['total'] : 0;
+
+        // Valores por defecto para campos que podrían no existir en la BD
+        $ficha['instructor_nombres'] = null;
+        $ficha['instructor_apellidos'] = null;
+        $ficha['instructor_email'] = null;
+        $ficha['instructor_especialidad'] = null;
+        $ficha['HORARIO'] = null;
+        $ficha['AULA'] = null;
+
+        return $ficha;
     }
-    
+
+    /**
+     * Obtiene los aprendices de una ficha (con su progreso académico)
+     * @param int $fichaId
+     * @return array
+     */
     public function obtenerAprendices($fichaId)
     {
         $sql = "SELECT 
@@ -109,39 +139,30 @@ class FichaDAO extends BaseDatos
                 ORDER BY a.APELLIDOS, a.NOMBRES";
 
         $stmt = $this->ejecutarPreparado($sql, [':fichaId' => $fichaId]);
-        
-        if ($stmt) {
-            return $stmt->fetchAll();
-        }
-        return [];
+        return $stmt ? $stmt->fetchAll() : [];
     }
 
     /**
-     * Obtiene las asistencias de una semana específica para los aprendices de una ficha
-     * @param int $fichaId
-     * @param string $inicioSemana Fecha de inicio de la semana (lunes) en formato Y-m-d
-     * @return array Array asociativo con APRENDIZ_ID como clave y array de fechas como valor
+     * Obtiene las asistencias de una semana para los aprendices de una ficha (formato antiguo, se recomienda usar AsistenciaDAO)
+     * @deprecated Usar AsistenciaDAO->obtenerAsistenciasSemana()
      */
     public function obtenerAsistenciasSemana($fichaId, $inicioSemana)
     {
-        $finSemana = date('Y-m-d', strtotime($inicioSemana . ' +5 days')); // sábado
+        $finSemana = date('Y-m-d', strtotime($inicioSemana . ' +5 days'));
         $sql = "SELECT a.ESTUDIANTE_ID, a.FECHA 
                 FROM asistencia a
                 INNER JOIN aprendiz ap ON a.ESTUDIANTE_ID = ap.APRENDIZ_ID
                 WHERE ap.FICHA_ID = :fichaId
                 AND a.FECHA BETWEEN :inicio AND :fin
                 AND a.ESTADO = 'Presente'";
-        
         $stmt = $this->ejecutarPreparado($sql, [
             ':fichaId' => $fichaId,
             ':inicio' => $inicioSemana,
             ':fin' => $finSemana
         ]);
-        
         $asistencias = [];
         if ($stmt) {
-            $rows = $stmt->fetchAll();
-            foreach ($rows as $row) {
+            foreach ($stmt->fetchAll() as $row) {
                 $estudianteId = $row['ESTUDIANTE_ID'];
                 $fecha = $row['FECHA'];
                 if (!isset($asistencias[$estudianteId])) {
@@ -154,60 +175,90 @@ class FichaDAO extends BaseDatos
     }
 
     /**
-     * Guarda las asistencias de una semana para una ficha
-     * @param int $fichaId
-     * @param string $inicioSemana Fecha de inicio de la semana (lunes)
-     * @param array $asistenciasMarcadas Array con estructura [aprendiz_id][fecha] = true
-     * @return bool
+     * Guarda asistencias de una semana (método obsoleto, usar AsistenciaDAO)
+     * @deprecated
      */
     public function guardarAsistenciasSemana($fichaId, $inicioSemana, $asistenciasMarcadas)
     {
-        $aprendices = $this->obtenerAprendices($fichaId);
-        if (empty($aprendices)) return false;
-        
-        $aprendicesIds = array_column($aprendices, 'APRENDIZ_ID');
-        
-        $fechasSemana = [];
-        for ($i = 0; $i < 6; $i++) {
-            $fechasSemana[] = date('Y-m-d', strtotime($inicioSemana . " +$i days"));
-        }
-        
-        try {
-            $this->Conexion_ID->beginTransaction();
-            
-            // Eliminar asistencias existentes de la semana para estos aprendices
-            $placeholders = implode(',', array_fill(0, count($aprendicesIds), '?'));
-            $sqlDelete = "DELETE FROM asistencia 
-                          WHERE ESTUDIANTE_ID IN ($placeholders)
-                          AND FECHA BETWEEN ? AND ?";
-            $paramsDelete = array_merge($aprendicesIds, [$fechasSemana[0], $fechasSemana[5]]);
-            
-            $stmtDelete = $this->ejecutarPreparado($sqlDelete, $paramsDelete);
-            if (!$stmtDelete) {
-                $this->Conexion_ID->rollBack();
-                return false;
-            }
-            
-            // Insertar nuevas asistencias (solo las marcadas)
-            $sqlInsert = "INSERT INTO asistencia (ESTUDIANTE_ID, FECHA, ESTADO) VALUES (?, ?, 'Presente')";
-            $stmtInsert = $this->Conexion_ID->prepare($sqlInsert);
-            
-            foreach ($asistenciasMarcadas as $aprendizId => $fechas) {
-                foreach ($fechas as $fecha => $marcado) {
-                    if ($marcado && in_array($fecha, $fechasSemana)) {
-                        $stmtInsert->execute([$aprendizId, $fecha]);
-                    }
-                }
-            }
-            
-            $this->Conexion_ID->commit();
-            return true;
-        } catch (Exception $e) {
-            $this->Conexion_ID->rollBack();
-            $this->ErrTxt = $e->getMessage();
-            error_log("Error guardando asistencias: " . $e->getMessage());
+        // Este método ya no se usa, se recomienda usar AsistenciaDAO
+        // Se mantiene por compatibilidad pero no se recomienda su uso.
+        return false;
+    }
+
+    /**
+     * Crea una nueva ficha
+     * @param string $codigoFicha
+     * @param int $programaId
+     * @param int $centroId
+     * @param string $fechaInicio
+     * @param string $fechaFin
+     * @param string $estado
+     * @return int|false ID de la ficha o false en caso de error
+     */
+    public function crearFicha($codigoFicha, $programaId, $centroId, $fechaInicio, $fechaFin, $estado = 'Activa')
+    {
+        $sql = "INSERT INTO ficha (CODIGO_FICHA, PROGRAMA_ID, CENTRO_ID, FECHA_INICIO, FECHA_FIN, ESTADO)
+                VALUES (:codigo, :programaId, :centroId, :inicio, :fin, :estado)";
+        $stmt = $this->ejecutarPreparado($sql, [
+            ':codigo' => $codigoFicha,
+            ':programaId' => $programaId,
+            ':centroId' => $centroId,
+            ':inicio' => $fechaInicio,
+            ':fin' => $fechaFin,
+            ':estado' => $estado
+        ]);
+        return $stmt ? $this->Conexion_ID->lastInsertId() : false;
+    }
+
+    /**
+     * Actualiza una ficha existente
+     * @param int $id
+     * @param string $codigoFicha
+     * @param int $programaId
+     * @param int $centroId
+     * @param string $fechaInicio
+     * @param string $fechaFin
+     * @param string $estado
+     * @return bool
+     */
+    public function actualizarFicha($id, $codigoFicha, $programaId, $centroId, $fechaInicio, $fechaFin, $estado = 'Activa')
+    {
+        $sql = "UPDATE ficha SET 
+                    CODIGO_FICHA = :codigo,
+                    PROGRAMA_ID = :programaId,
+                    CENTRO_ID = :centroId,
+                    FECHA_INICIO = :inicio,
+                    FECHA_FIN = :fin,
+                    ESTADO = :estado
+                WHERE FICHA_ID = :id";
+        $stmt = $this->ejecutarPreparado($sql, [
+            ':id' => $id,
+            ':codigo' => $codigoFicha,
+            ':programaId' => $programaId,
+            ':centroId' => $centroId,
+            ':inicio' => $fechaInicio,
+            ':fin' => $fechaFin,
+            ':estado' => $estado
+        ]);
+        return $stmt ? true : false;
+    }
+
+    /**
+     * Elimina una ficha (solo si no tiene aprendices asociados)
+     * @param int $id
+     * @return bool
+     */
+    public function eliminarFicha($id)
+    {
+        // Verificar si tiene aprendices
+        $sqlCheck = "SELECT COUNT(*) as total FROM aprendiz WHERE FICHA_ID = :id";
+        $stmt = $this->ejecutarPreparado($sqlCheck, [':id' => $id]);
+        if ($stmt && ($row = $stmt->fetch()) && $row['total'] > 0) {
             return false;
         }
+        $sql = "DELETE FROM ficha WHERE FICHA_ID = :id";
+        $stmt = $this->ejecutarPreparado($sql, [':id' => $id]);
+        return $stmt ? true : false;
     }
 }
 ?>

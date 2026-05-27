@@ -49,7 +49,7 @@ $aprendices = $fichaDAO->obtenerAprendices($id);
             </a>
             <?php if (esAdmin()): ?>
             <div style="display: flex; gap: 10px;">
-                <a href="editar_ficha.php?id=<?= $id ?>" class="btn-create">
+                <a href="../mod/crud/editar_ficha.php?id=<?= $id ?>" class="btn-create">
                     <i class="fas fa-edit"></i> Editar Ficha
                 </a>
                 <a href="#" class="btn-cancel" onclick="confirmarEliminacion(<?= $id ?>)">
@@ -231,7 +231,7 @@ $aprendices = $fichaDAO->obtenerAprendices($id);
                 reverseButtons: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = 'eliminar_ficha.php?id=' + id;
+                    window.location.href = 'crud/eliminar_ficha.php?id=' + id;
                 }
             });
         }

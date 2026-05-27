@@ -22,6 +22,8 @@ $programas = $dao->obtenerProgramas($id);
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($centro['NOMBRE']) ?> - Centro</title>
@@ -43,8 +45,8 @@ $programas = $dao->obtenerProgramas($id);
                     <i class="fas fa-edit"></i> Editar Centro
                 </a>
                 <?php if (esAdmin()): ?>
-                <a href="crud/crear_ficha.php?centro_id=<?= $id ?>" class="btn-create">
-                    <i class="fas fa-layer-group"></i> Nueva ficha
+                <a href="crud/crear_programa.php?centro_id=<?= $id ?>" class="btn-create">
+                    <i class="fas fa-layer-group"></i> Nuevo programa
                 </a>
                 <?php endif; ?>
                 <a href="#" class="btn-cancel" onclick="confirmarEliminacion(<?= $id ?>)">

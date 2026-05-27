@@ -48,9 +48,12 @@ $iniciales = substr($instructor['NOMBRES'], 0, 1) . substr($instructor['APELLIDO
             <a href="instructores.php" class="btn-volver-detalle">
                 <i class="fas fa-arrow-left"></i> Volver a la lista
             </a>
+            <a href="gestionar_horario.php?ficha_id=<?= $ficha['FICHA_ID'] ?>" class="btn-action">
+    <i class="fas fa-calendar-alt"></i> Horario
+</a>
             <?php if (esAdmin()): ?>
             <div style="display: flex; gap: 10px;">
-                <a href="editar_instructor.php?id=<?= $id ?>" class="btn-create">
+                <a href="crud/editar_instructor.php?id=<?= $id ?>" class="btn-create">
                     <i class="fas fa-edit"></i> Editar Instructor
                 </a>
                 <a href="#" class="btn-cancel" onclick="confirmarEliminacion(<?= $id ?>)">
@@ -192,7 +195,7 @@ $iniciales = substr($instructor['NOMBRES'], 0, 1) . substr($instructor['APELLIDO
                 reverseButtons: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = 'eliminar_instructor.php?id=' + id;
+                    window.location.href = 'crud/eliminar_instructor.php?id=' + id;
                 }
             });
         }

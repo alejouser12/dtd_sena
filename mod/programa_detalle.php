@@ -57,31 +57,34 @@ $fichas = $programaDAO->obtenerFichas($id);
             <i class="fas fa-arrow-left"></i> Volver al centro
         </a>
         <?php else: ?>
-        <a href="programas.php" class="btn-view-all" style="margin-bottom: 20px; display: inline-block;">
-            <i class="fas fa-arrow-left"></i> Volver a programas
+        <a href="centro_detalle.php" class="btn-view-all" style="margin-bottom: 20px; display: inline-block;">
+            <i class="fas fa-arrow-left"></i> Volver a centros
         </a>
         <?php endif; ?>
 
-        <!-- Cabecera del Programa con botones de edición/eliminación para admin -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px;">
-            <div class="programa-header" style="flex: 1;">
-                <h1 class="programa-titulo"><?php echo htmlspecialchars($programa['NOMBRE']); ?></h1>
-                <div class="programa-meta">
-                    <span><i class="fas fa-graduation-cap"></i> <?php echo htmlspecialchars($programa['NIVEL_FORMACION']); ?></span>
-                    <span><i class="far fa-clock"></i> <?php echo $programa['DURACION_MESES']; ?> meses</span>
-                    <span><i class="fas fa-circle"></i> <?php echo htmlspecialchars($programa['ESTADO']); ?></span>
-                </div>
+        <!-- Barra de acciones (botones) fuera de la tarjeta verde -->
+        <?php if (esAdmin()): ?>
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 20px;">
+            <a href="crud/crear_ficha.php?programa_id=<?= $programa['PROGRAMA_ID'] ?>&centro_id=<?= $centro['CENTRO_ID'] ?? '' ?>" class="btn-create">
+                <i class="fas fa-plus-circle"></i> Agregar Ficha
+            </a>
+            <a href="../mod/crud/editar_programa.php?id=<?= $programa['PROGRAMA_ID'] ?>" class="btn-action">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            <a href="#" class="btn-cancel" onclick="confirmarEliminacion(<?= $programa['PROGRAMA_ID'] ?>)">
+                <i class="fas fa-trash-alt"></i> Eliminar
+            </a>
+        </div>
+        <?php endif; ?>
+
+        <!-- Cabecera del Programa (tarjeta verde) -->
+        <div class="programa-header">
+            <h1 class="programa-titulo"><?php echo htmlspecialchars($programa['NOMBRE']); ?></h1>
+            <div class="programa-meta">
+                <span><i class="fas fa-graduation-cap"></i> <?php echo htmlspecialchars($programa['NIVEL_FORMACION']); ?></span>
+                <span><i class="far fa-clock"></i> <?php echo $programa['DURACION_MESES']; ?> meses</span>
+                <span><i class="fas fa-circle"></i> <?php echo htmlspecialchars($programa['ESTADO']); ?></span>
             </div>
-            <?php if (esAdmin()): ?>
-            <div style="display: flex; gap: 10px;">
-                <a href="editar_programa.php?id=<?= $programa['PROGRAMA_ID'] ?>" class="btn-create">
-                    <i class="fas fa-edit"></i> Editar
-                </a>
-                <a href="#" class="btn-cancel" onclick="confirmarEliminacion(<?= $programa['PROGRAMA_ID'] ?>)">
-                    <i class="fas fa-trash-alt"></i> Eliminar
-                </a>
-            </div>
-            <?php endif; ?>
         </div>
 
         <!-- Información del centro si existe -->
@@ -161,6 +164,11 @@ $fichas = $programaDAO->obtenerFichas($id);
                 <i class="fas fa-folder-open"></i>
                 <h3>No hay fichas disponibles</h3>
                 <p>Este programa no tiene fichas asociadas actualmente.</p>
+                <?php if (esAdmin()): ?>
+                <a href="crud/crear_ficha.php?programa_id=<?= $programa['PROGRAMA_ID'] ?>&centro_id=<?= $centro['CENTRO_ID'] ?? '' ?>" class="btn-create" style="margin-top: 20px;">
+                    <i class="fas fa-plus-circle"></i> Agregar primera ficha
+                </a>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="fichas-grid-moderno">
@@ -236,7 +244,7 @@ $fichas = $programaDAO->obtenerFichas($id);
                 reverseButtons: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = 'eliminar_programa.php?id=' + id;
+                    window.location.href = 'crud/eliminar_programa.php?id=' + id;
                 }
             });
         }

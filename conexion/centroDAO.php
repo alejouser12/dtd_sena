@@ -33,6 +33,22 @@ class CentroDAO extends BaseDatos
         return $stmt ? $stmt->fetchAll() : [];
     }
 
+    /**
+     * Obtiene los centros de una regional específica (usado para filtros)
+     * @param int $regionalId
+     * @return array
+     */
+    public function obtenerPorRegional($regionalId)
+    {
+        $sql = "SELECT c.*, r.NOMBRE as regional_nombre
+                FROM centro c
+                INNER JOIN regional r ON c.REGIONAL_ID = r.REGIONAL_ID
+                WHERE c.REGIONAL_ID = :regionalId AND c.ESTADO = 'Activo'
+                ORDER BY c.NOMBRE";
+        $stmt = $this->ejecutarPreparado($sql, [':regionalId' => $regionalId]);
+        return $stmt ? $stmt->fetchAll() : [];
+    }
+
     public function obtenerProgramas($centroId)
     {
         $sql = "SELECT 

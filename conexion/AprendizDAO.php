@@ -48,7 +48,6 @@ class AprendizDAO extends BaseDatos
         $aprendiz = $stmt->fetch();
         if (!$aprendiz) return null;
 
-        // Si no hay progreso, calcular nivel de riesgo por defecto
         if (!isset($aprendiz['NIVEL_RIESGO_GLOBAL'])) {
             $aprendiz['NIVEL_RIESGO_GLOBAL'] = $this->calcularNivelRiesgo($aprendiz);
         }
@@ -61,7 +60,6 @@ class AprendizDAO extends BaseDatos
      */
     public function obtenerAprendicesPaginados($inicio = 0, $cantidad = 10, $filtroFichas = false)
     {
-        // Asegurar que sean enteros para evitar inyección
         $inicio = (int)$inicio;
         $cantidad = (int)$cantidad;
 
@@ -269,7 +267,6 @@ class AprendizDAO extends BaseDatos
             }
         }
 
-        // Buscar en progreso_estudiante
         $sql = "SELECT * FROM progreso_estudiante WHERE ESTUDIANTE_ID = :id ORDER BY FECHA_ACTUALIZACION DESC LIMIT 1";
         $stmt = $this->ejecutarPreparado($sql, [':id' => $aprendiz['APRENDIZ_ID']]);
         $progreso = $stmt ? $stmt->fetch() : null;
@@ -278,7 +275,6 @@ class AprendizDAO extends BaseDatos
             return $progreso['NIVEL_RIESGO_GLOBAL'];
         }
         
-        // Si no hay progreso, buscar en observaciones
         $sqlObs = "SELECT NIVEL_RIESGO FROM observacion_academica 
                    WHERE ESTUDIANTE_ID = :id AND NIVEL_RIESGO IS NOT NULL 
                    ORDER BY FECHA DESC LIMIT 1";
@@ -293,7 +289,7 @@ class AprendizDAO extends BaseDatos
     }
 
     /**
-     * Persiste en progreso_estudiante el nivel de riesgo según alertas activas (si existe fila de progreso).
+     * Persiste en progreso_estudiante el nivel de riesgo según alertas activas
      */
     public function refrescarNivelRiesgoProgreso($aprendizId)
     {
@@ -465,7 +461,6 @@ class AprendizDAO extends BaseDatos
      */
     public function obtenerEvidenciasPendientes($aprendizId)
     {
-        // Primero obtener la ficha del aprendiz
         $sqlFicha = "SELECT FICHA_ID FROM aprendiz WHERE APRENDIZ_ID = :id";
         $stmtFicha = $this->ejecutarPreparado($sqlFicha, [':id' => $aprendizId]);
         if (!$stmtFicha) return 0;
@@ -473,7 +468,6 @@ class AprendizDAO extends BaseDatos
         if (!$fila || !$fila['FICHA_ID']) return 0;
         $fichaId = $fila['FICHA_ID'];
 
-        // Contar evidencias de la ficha que no tienen calificación para este aprendiz
         $sql = "SELECT COUNT(*) as total 
                 FROM evidencias e
                 LEFT JOIN calificaciones_evidencias c 
@@ -498,45 +492,236 @@ class AprendizDAO extends BaseDatos
     public function eliminarAprendizForzado($id)
     {
         try {
-            // Iniciar transacción
             $this->Conexion_ID->beginTransaction();
             
-            // 1. Eliminar alertas
             $sql1 = "DELETE FROM alerta WHERE ESTUDIANTE_ID = :id";
             $this->ejecutarPreparado($sql1, [':id' => $id]);
             
-            // 2. Eliminar asistencias
             $sql2 = "DELETE FROM asistencia WHERE APRENDIZ_ID = :id";
             $this->ejecutarPreparado($sql2, [':id' => $id]);
             
-            // 3. Eliminar observaciones académicas
             $sql3 = "DELETE FROM observacion_academica WHERE ESTUDIANTE_ID = :id";
             $this->ejecutarPreparado($sql3, [':id' => $id]);
             
-            // 4. Eliminar progreso del estudiante
             $sql4 = "DELETE FROM progreso_estudiante WHERE ESTUDIANTE_ID = :id";
             $this->ejecutarPreparado($sql4, [':id' => $id]);
             
-            // 5. Eliminar calificaciones de evidencias
             $sql5 = "DELETE FROM calificaciones_evidencias WHERE aprendiz_id = :id";
             $this->ejecutarPreparado($sql5, [':id' => $id]);
             
-            // 6. Finalmente eliminar el aprendiz
             $sql6 = "DELETE FROM aprendiz WHERE APRENDIZ_ID = :id";
             $stmt = $this->ejecutarPreparado($sql6, [':id' => $id]);
             
-            // Confirmar transacción
             $this->Conexion_ID->commit();
-            
             return $stmt ? true : false;
             
         } catch (Exception $e) {
-            // Revertir cambios en caso de error
             $this->Conexion_ID->rollBack();
             error_log("Error eliminando aprendiz $id: " . $e->getMessage());
             $this->ErrTxt = $e->getMessage();
             return false;
         }
+    }
+
+    // ==================== MÉTODOS PARA EL PERFIL Y ESTADÍSTICAS ====================
+
+    /**
+     * Obtiene un aprendiz por su ID de usuario
+     */
+    public function obtenerPorUsuarioId($usuarioId)
+    {
+        $sql = "SELECT a.*, f.CODIGO_FICHA, p.NOMBRE as programa_nombre, p.NIVEL_FORMACION,
+                       c.NOMBRE as centro_nombre, r.NOMBRE as regional_nombre
+                FROM aprendiz a
+                LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
+                LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
+                LEFT JOIN centro c ON f.CENTRO_ID = c.CENTRO_ID
+                LEFT JOIN regional r ON c.REGIONAL_ID = r.REGIONAL_ID
+                WHERE a.usuario_id = :usuarioId";
+        $stmt = $this->ejecutarPreparado($sql, [':usuarioId' => $usuarioId]);
+        return $stmt ? $stmt->fetch() : null;
+    }
+
+    /**
+     * Resumen de asistencia para un aprendiz (delega en AsistenciaDAO)
+     */
+    public function obtenerResumenAsistencia($aprendizId)
+    {
+        require_once __DIR__ . '/AsistenciaDAO.php';
+        $asistenciaDAO = new AsistenciaDAO();
+        return $asistenciaDAO->obtenerResumenAprendiz($aprendizId);
+    }
+
+    /**
+     * Evidencias con calificación del aprendiz
+     */
+    public function obtenerEvidenciasConCalificacion($aprendizId)
+    {
+        $sqlFicha = "SELECT FICHA_ID FROM aprendiz WHERE APRENDIZ_ID = :id";
+        $stmtFicha = $this->ejecutarPreparado($sqlFicha, [':id' => $aprendizId]);
+        if (!$stmtFicha) return [];
+        $fila = $stmtFicha->fetch();
+        if (!$fila || !$fila['FICHA_ID']) return [];
+        $fichaId = $fila['FICHA_ID'];
+
+        $sql = "SELECT e.*, c.calificacion, c.estado_aprobacion
+                FROM evidencias e
+                WHERE e.ficha_id = :fichaId
+                ORDER BY e.fecha_evidencia DESC";
+        $stmt = $this->ejecutarPreparado($sql, [':fichaId' => $fichaId]);
+        $evidencias = $stmt ? $stmt->fetchAll() : [];
+
+        foreach ($evidencias as &$ev) {
+            $sqlCal = "SELECT calificacion, estado_aprobacion 
+                       FROM calificaciones_evidencias 
+                       WHERE evidencia_id = :evId AND aprendiz_id = :apId";
+            $stmtCal = $this->ejecutarPreparado($sqlCal, [
+                ':evId' => $ev['evidencias_id'],
+                ':apId' => $aprendizId
+            ]);
+            if ($stmtCal && ($cal = $stmtCal->fetch())) {
+                $ev['calificacion'] = $cal['calificacion'];
+                $ev['estado_aprobacion'] = $cal['estado_aprobacion'];
+            } else {
+                $ev['calificacion'] = null;
+                $ev['estado_aprobacion'] = null;
+            }
+        }
+        return $evidencias;
+    }
+
+    /**
+     * Obtiene la asistencia mensual de un aprendiz
+     */
+    public function obtenerAsistenciaMensual($aprendizId, $year = null, $month = null)
+    {
+        if (!$year) $year = date('Y');
+        if (!$month) $month = date('m');
+        $sql = "SELECT 
+                    DAY(FECHA) as dia,
+                    ESTADO,
+                    HORAS_FALTA
+                FROM asistencia
+                WHERE ESTUDIANTE_ID = :id
+                AND YEAR(FECHA) = :year
+                AND MONTH(FECHA) = :month
+                ORDER BY FECHA ASC";
+        $stmt = $this->ejecutarPreparado($sql, [
+            ':id' => $aprendizId,
+            ':year' => $year,
+            ':month' => $month
+        ]);
+        return $stmt ? $stmt->fetchAll() : [];
+    }
+
+    /**
+     * Obtiene la evolución de notas del aprendiz
+     */
+    public function obtenerEvolucionNotas($aprendizId)
+    {
+        $sql = "SELECT 
+                    e.fecha_evidencia as fecha,
+                    c.calificacion,
+                    e.nombre as evidencia_nombre
+                FROM calificaciones_evidencias c
+                JOIN evidencias e ON c.evidencia_id = e.evidencias_id
+                WHERE c.aprendiz_id = :id
+                AND c.calificacion IS NOT NULL
+                ORDER BY e.fecha_evidencia ASC";
+        $stmt = $this->ejecutarPreparado($sql, [':id' => $aprendizId]);
+        return $stmt ? $stmt->fetchAll() : [];
+    }
+
+    /**
+     * Obtiene las faltas pendientes de justificación
+     */
+    public function obtenerFaltasConJustificacionPendiente($aprendizId)
+    {
+        $sql = "SELECT 
+                    ASISTENCIA_ID,
+                    FECHA,
+                    ESTADO,
+                    HORAS_FALTA,
+                    FECHA_LIMITE_EXCUSA
+                FROM asistencia
+                WHERE ESTUDIANTE_ID = :id
+                AND ESTADO = 'falta'
+                AND EXCUSA_PRESENTADA = 0
+                AND (FECHA_LIMITE_EXCUSA IS NULL OR FECHA_LIMITE_EXCUSA >= CURDATE())
+                ORDER BY FECHA ASC";
+        $stmt = $this->ejecutarPreparado($sql, [':id' => $aprendizId]);
+        return $stmt ? $stmt->fetchAll() : [];
+    }
+
+    /**
+     * Verifica si una falta puede ser justificada
+     */
+    public function obtenerJustificacionPendiente($asistenciaId, $aprendizId)
+    {
+        $sql = "SELECT * FROM asistencia 
+                WHERE ASISTENCIA_ID = :asistencia_id 
+                AND ESTUDIANTE_ID = :aprendiz_id 
+                AND ESTADO = 'falta' 
+                AND EXCUSA_PRESENTADA = 0
+                AND (FECHA_LIMITE_EXCUSA IS NULL OR FECHA_LIMITE_EXCUSA >= CURDATE())";
+        $stmt = $this->ejecutarPreparado($sql, [
+            ':asistencia_id' => $asistenciaId,
+            ':aprendiz_id' => $aprendizId
+        ]);
+        return $stmt ? $stmt->fetch() : null;
+    }
+
+    /**
+     * Guarda la justificación de una falta
+     */
+    public function guardarJustificacion($asistenciaId, $aprendizId, $textoJustificacion)
+    {
+        $sql = "UPDATE asistencia 
+                SET EXCUSA_PRESENTADA = 1,
+                    JUSTIFICACION_TEXTO = :texto,
+                    ESTADO = 'excusa'
+                WHERE ASISTENCIA_ID = :asistencia_id 
+                AND ESTUDIANTE_ID = :aprendiz_id
+                AND EXCUSA_PRESENTADA = 0";
+        $stmt = $this->ejecutarPreparado($sql, [
+            ':texto' => $textoJustificacion,
+            ':asistencia_id' => $asistenciaId,
+            ':aprendiz_id' => $aprendizId
+        ]);
+        return $stmt && $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Obtiene las evidencias próximas a vencer
+     */
+    public function obtenerEvidenciasProximas($aprendizId, $dias = 30)
+    {
+        $sqlFicha = "SELECT FICHA_ID FROM aprendiz WHERE APRENDIZ_ID = :id";
+        $stmtFicha = $this->ejecutarPreparado($sqlFicha, [':id' => $aprendizId]);
+        if (!$stmtFicha) return [];
+        $fila = $stmtFicha->fetch();
+        if (!$fila || !$fila['FICHA_ID']) return [];
+        $fichaId = $fila['FICHA_ID'];
+
+        $sql = "SELECT 
+                    e.*,
+                    CASE 
+                        WHEN c.calificacion IS NOT NULL THEN 'calificado'
+                        ELSE 'pendiente'
+                    END as estado_calificacion
+                FROM evidencias e
+                LEFT JOIN calificaciones_evidencias c 
+                    ON e.evidencias_id = c.evidencia_id AND c.aprendiz_id = :aprendizId
+                WHERE e.ficha_id = :fichaId
+                AND e.fecha_evidencia >= CURDATE()
+                AND e.fecha_evidencia <= DATE_ADD(CURDATE(), INTERVAL :dias DAY)
+                ORDER BY e.fecha_evidencia ASC";
+        $stmt = $this->ejecutarPreparado($sql, [
+            ':aprendizId' => $aprendizId,
+            ':fichaId' => $fichaId,
+            ':dias' => $dias
+        ]);
+        return $stmt ? $stmt->fetchAll() : [];
     }
 }
 ?>

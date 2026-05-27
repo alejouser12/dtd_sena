@@ -3,75 +3,56 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../conexion/EvidenciaDAO.php';
 
-// Verificar que sea POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: evidencias.php');
     exit;
 }
 
-// Validar evidencia_id
-$evidencia_id = intval($_POST['evidencia_id'] ?? 0);
-if ($evidencia_id <= 0) {
-    header('Location: evidencias.php');
+$evidenciaId = isset($_POST['evidencia_id']) ? (int)$_POST['evidencia_id'] : 0;
+$calificacionesRaw = $_POST['calificacion'] ?? [];
+
+if ($evidenciaId <= 0) {
+    header('Location: evidencias.php?error=invalid_id');
     exit;
 }
 
-// Obtener arrays de estados y calificaciones
-$estados = $_POST['estado'] ?? [];
-$calificaciones_numeros = $_POST['calificacion'] ?? [];
+$dao = new EvidenciaDAO();
+$evidencia = $dao->obtenerPorId($evidenciaId);
+if (!$evidencia) {
+    header('Location: evidencias.php?error=not_found');
+    exit;
+}
 
-// Construir array de calificaciones a guardar
-$calificaciones = [];
-foreach ($estados as $aprendiz_id => $estado) {
-    $aprendiz_id = intval($aprendiz_id);
-    if ($aprendiz_id > 0 && !empty($estado)) { // Solo si se seleccionó un estado
-        $calificaciones[$aprendiz_id] = [
-            'estado' => $estado,
-            'calificacion' => isset($calificaciones_numeros[$aprendiz_id]) ? floatval($calificaciones_numeros[$aprendiz_id]) : null
-        ];
+// Validar permiso: instructor solo puede calificar si la ficha le pertenece
+if (!esAdmin()) {
+    $instructorId = $_SESSION['usuario_id'] ?? null;
+    if (!$instructorId || !$dao->instructorPuedeCalificar($instructorId, $evidenciaId)) {
+        header('Location: evidencias.php?error=sin_permiso');
+        exit;
     }
 }
 
-// Si no hay calificaciones, mostrar error
-if (empty($calificaciones)) {
-    echo '<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body>';
-    echo '<script>
-        Swal.fire({
-            icon: "warning",
-            title: "Sin datos",
-            text: "No se seleccionó ningún estado para calificar.",
-            confirmButtonText: "Aceptar"
-        }).then(() => { window.location.href = "calificar_evidencia.php?id=' . $evidencia_id . '"; });
-    </script></body></html>';
-    exit;
+// Procesar calificaciones: convertir valores vacíos a null
+$calificaciones = [];
+foreach ($calificacionesRaw as $aprendizId => $nota) {
+    $aprendizId = (int)$aprendizId;
+    if ($aprendizId <= 0) continue;
+    $nota = trim($nota);
+    if ($nota === '') {
+        $calificaciones[$aprendizId] = null;
+    } else {
+        $notaNum = (float)$nota;
+        $calificaciones[$aprendizId] = min(5, max(0, $notaNum));
+    }
 }
 
-// Guardar
-$dao = new EvidenciaDAO();
-$resultado = $dao->guardarCalificaciones($evidencia_id, $calificaciones);
-
-if ($resultado) {
-    echo '<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body>';
-    echo '<script>
-        Swal.fire({
-            icon: "success",
-            title: "Calificaciones guardadas",
-            text: "Las calificaciones se han registrado correctamente.",
-            timer: 2000,
-            showConfirmButton: false
-        }).then(() => { window.location.href = "evidencias.php"; });
-    </script></body></html>';
+if ($dao->guardarCalificaciones($evidenciaId, $calificaciones)) {
+    header('Location: evidencias.php?success=calificado');
 } else {
-    echo '<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body>';
-    echo '<script>
-        Swal.fire({
-            icon: "error",
-            title: "Error",
-            text: "No se pudieron guardar las calificaciones: ' . addslashes($dao->imprimirError()) . '",
-            confirmButtonText: "Aceptar"
-        }).then(() => { window.location.href = "calificar_evidencia.php?id=' . $evidencia_id . '"; });
-    </script></body></html>';
+    header('Location: calificar_evidencia.php?id=' . $evidenciaId . '&error=db');
 }
+exit;
 ?>

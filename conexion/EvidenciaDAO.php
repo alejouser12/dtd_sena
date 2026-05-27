@@ -10,7 +10,7 @@ class EvidenciaDAO extends BaseDatos
     protected function eliminar() {}
 
     /**
-     * Obtiene todas las evidencias con información de la ficha
+     * Obtiene todas las evidencias (sin filtros adicionales)
      */
     public function obtenerTodas()
     {
@@ -23,6 +23,49 @@ class EvidenciaDAO extends BaseDatos
         $this->Consulta_ID = $this->ejecutarSQL($sql);
         if ($this->Consulta_ID) {
             return $this->cargarTodo();
+        }
+        return [];
+    }
+
+    /**
+     * Obtiene evidencias según rol y filtros opcionales (regional, centro)
+     * @param string $rol 'admin' o 'instructor'
+     * @param int|null $usuarioId ID del instructor (si es instructor)
+     * @param int|null $regionalId Filtro por regional
+     * @param int|null $centroId Filtro por centro
+     * @return array
+     */
+    public function obtenerEvidenciasConFiltros($rol, $usuarioId = null, $regionalId = null, $centroId = null)
+    {
+        $sql = "SELECT e.*, f.CODIGO_FICHA, f.CENTRO_ID, 
+                       c.NOMBRE as centro_nombre, c.REGIONAL_ID,
+                       r.NOMBRE as regional_nombre
+                FROM evidencias e
+                JOIN ficha f ON e.ficha_id = f.FICHA_ID
+                LEFT JOIN centro c ON f.CENTRO_ID = c.CENTRO_ID
+                LEFT JOIN regional r ON c.REGIONAL_ID = r.REGIONAL_ID
+                WHERE e.estado_evidencia = 'activa' ";
+
+        $params = [];
+
+        if ($rol === 'instructor' && $usuarioId) {
+            $sql .= " AND f.FICHA_ID IN (SELECT FICHA_ID FROM instructor_ficha WHERE INSTRUCTOR_ID = :instId)";
+            $params[':instId'] = $usuarioId;
+        }
+
+        if ($regionalId) {
+            $sql .= " AND c.REGIONAL_ID = :regId";
+            $params[':regId'] = $regionalId;
+        }
+        if ($centroId) {
+            $sql .= " AND f.CENTRO_ID = :centId";
+            $params[':centId'] = $centroId;
+        }
+
+        $sql .= " ORDER BY e.fecha_evidencia DESC";
+        $stmt = $this->ejecutarPreparado($sql, $params);
+        if ($stmt) {
+            return $stmt->fetchAll();
         }
         return [];
     }
@@ -51,7 +94,7 @@ class EvidenciaDAO extends BaseDatos
      */
     public function obtenerPorId($id)
     {
-        $sql = "SELECT e.*, f.CODIGO_FICHA 
+        $sql = "SELECT e.*, f.CODIGO_FICHA, f.CENTRO_ID
                 FROM evidencias e
                 JOIN ficha f ON e.ficha_id = f.FICHA_ID
                 WHERE e.evidencias_id = :id";
@@ -146,11 +189,22 @@ class EvidenciaDAO extends BaseDatos
     }
 
     /**
-     * Guarda o actualiza una calificación
+     * Guarda o actualiza una calificación (el estado se calcula automáticamente según la nota)
+     * @param int $evidenciaId
+     * @param int $aprendizId
+     * @param float|null $calificacion (null si no se asigna nota)
+     * @return bool
      */
-    public function guardarCalificacion($evidenciaId, $aprendizId, $calificacion, $estado)
+    public function guardarCalificacion($evidenciaId, $aprendizId, $calificacion)
     {
-        // Verificar si ya existe
+        // Calcular estado automático
+        $estado = null;
+        if ($calificacion !== null && $calificacion !== '') {
+            $estado = ($calificacion >= 3) ? 'aprobado' : 'desaprobado';
+        } else {
+            $estado = ''; // sin calificación
+        }
+
         $sql = "SELECT calificacion_id FROM calificaciones_evidencias 
                 WHERE evidencia_id = :evidencia_id AND aprendiz_id = :aprendiz_id";
         $stmt = $this->ejecutarPreparado($sql, [
@@ -161,14 +215,12 @@ class EvidenciaDAO extends BaseDatos
         $existente = $stmt ? $stmt->fetch() : null;
 
         if ($existente) {
-            // Actualizar
             $sql = "UPDATE calificaciones_evidencias 
                     SET calificacion = :calificacion, 
                         estado_aprobacion = :estado,
                         fecha_calificacion = NOW()
                     WHERE evidencia_id = :evidencia_id AND aprendiz_id = :aprendiz_id";
         } else {
-            // Insertar
             $sql = "INSERT INTO calificaciones_evidencias (evidencia_id, aprendiz_id, calificacion, estado_aprobacion, fecha_calificacion) 
                     VALUES (:evidencia_id, :aprendiz_id, :calificacion, :estado, NOW())";
         }
@@ -184,30 +236,49 @@ class EvidenciaDAO extends BaseDatos
         return $stmt ? true : false;
     }
 
+    /**
+     * Guarda múltiples calificaciones y actualiza el promedio del aprendiz
+     */
+    public function guardarCalificaciones($evidenciaId, array $calificaciones)
+    {
+        require_once __DIR__ . '/AprendizDAO.php';
+        $apDao = new AprendizDAO();
+        foreach ($calificaciones as $aprendizId => $nota) {
+            $aprendizId = (int)$aprendizId;
+            if ($aprendizId <= 0) continue;
+
+            $notaValor = ($nota !== null && $nota !== '') ? (float)$nota : null;
+            $this->guardarCalificacion($evidenciaId, $aprendizId, $notaValor);
+
+            // Actualizar promedio general del aprendiz
+            $apDao->actualizarPromedioDesdeCalificaciones($aprendizId);
+        }
+        return true;
+    }
+
+    /**
+     * Obtiene aprendices de una ficha
+     */
     public function obtenerAprendicesPorFicha($fichaId)
     {
         require_once __DIR__ . '/FichaDAO.php';
         return (new FichaDAO())->obtenerAprendices((int)$fichaId);
     }
 
-    public function guardarCalificaciones($evidenciaId, array $calificaciones)
+    /**
+     * Verifica si un instructor puede calificar una evidencia
+     */
+    public function instructorPuedeCalificar($instructorId, $evidenciaId)
     {
-        require_once __DIR__ . '/AprendizDAO.php';
-        $ap = new AprendizDAO();
-        foreach ($calificaciones as $aprendizId => $c) {
-            $aprendizId = (int)$aprendizId;
-            if ($aprendizId <= 0) {
-                continue;
-            }
-            $estado = $c['estado'] ?? '';
-            if ($estado === '') {
-                continue;
-            }
-            $cal = isset($c['calificacion']) && $c['calificacion'] !== '' ? (float)$c['calificacion'] : null;
-            $this->guardarCalificacion($evidenciaId, $aprendizId, $cal, $estado);
-            $ap->actualizarPromedioDesdeCalificaciones($aprendizId);
+        $sql = "SELECT COUNT(*) FROM evidencias e
+                JOIN ficha f ON e.ficha_id = f.FICHA_ID
+                JOIN instructor_ficha inf ON f.FICHA_ID = inf.FICHA_ID
+                WHERE e.evidencias_id = :evId AND inf.INSTRUCTOR_ID = :instId";
+        $stmt = $this->ejecutarPreparado($sql, [':evId' => $evidenciaId, ':instId' => $instructorId]);
+        if ($stmt && ($row = $stmt->fetch())) {
+            return $row[0] > 0;
         }
-        return true;
+        return false;
     }
 }
 ?>

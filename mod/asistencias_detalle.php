@@ -1,614 +1,547 @@
 <?php
+// mod/asistencias_detalle.php
 session_start();
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../conexion/FichaDAO.php';
 require_once __DIR__ . '/../conexion/AsistenciaDAO.php';
+require_once __DIR__ . '/../conexion/instructorDAO.php';
 
-$dao = new FichaDAO();
+$fichaDAO      = new FichaDAO();
 $asistenciaDAO = new AsistenciaDAO();
+$instDAO       = new InstructorDAO();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($id <= 0) {
-    header('Location: asistencias.php');
-    exit;
+if ($id <= 0) { header('Location: asistencias.php'); exit; }
+
+$ficha = $fichaDAO->obtenerPorId($id);
+if (!$ficha) { header('Location: asistencias.php'); exit; }
+
+// Instructor sólo ve sus fichas
+if (esInstructor()) {
+    $instId  = (int)($_SESSION['usuario_ref_id'] ?? 0);
+    $misF    = $instDAO->obtenerFichas($instId);
+    $misFIds = array_column($misF, 'FICHA_ID');
+    if (!in_array($id, $misFIds)) { header('Location: asistencias.php'); exit; }
 }
 
-$ficha = $dao->obtenerPorId($id);
-if (!$ficha) {
-    header('Location: asistencias.php');
-    exit;
-}
+$aprendices = $fichaDAO->obtenerAprendices($id);
 
-$aprendices = $dao->obtenerAprendices($id);
-
-// Lógica para obtener los días de la semana según filtro 
+// ── Semana seleccionada ───────────────────────────────────────────────────
 if (isset($_GET['semana']) && preg_match('/^\d{4}-W\d{1,2}$/', $_GET['semana'])) {
-    $semanaSeleccionada = $_GET['semana'];
-    list($anio, $semanaNum) = explode('-W', $semanaSeleccionada);
-    $semanaNum = (int)$semanaNum;
-    $fechaInicioSemana = new DateTime();
-    $fechaInicioSemana->setISODate($anio, $semanaNum, 1);
+    [$anio, $numSem] = explode('-W', $_GET['semana']);
+    $fechaInicio     = new DateTime();
+    $fechaInicio->setISODate((int)$anio, (int)$numSem, 1);
+    $semSel = $_GET['semana'];
 } else {
-    $fechaInicioSemana = new DateTime();
-    $fechaInicioSemana->modify('monday this week');
-    $semanaSeleccionada = $fechaInicioSemana->format('Y-\WW');
+    $fechaInicio = new DateTime();
+    $fechaInicio->modify('monday this week');
+    $semSel = $fechaInicio->format('Y-\WW');
 }
 
-$diasSemana = [];
-$diasNombres = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+$dias       = [];
+$dNombres   = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 for ($i = 0; $i < 6; $i++) {
-    $fecha = clone $fechaInicioSemana;
-    $fecha->modify("+$i days");
-    $diasSemana[] = [
-        'nombre' => $diasNombres[$i],
-        'fecha' => $fecha->format('Y-m-d'),
-        'fecha_formateada' => $fecha->format('d/m/Y')
+    $f = clone $fechaInicio;
+    $f->modify("+$i days");
+    $dias[] = [
+        'nombre'  => $dNombres[$i],
+        'fecha'   => $f->format('Y-m-d'),
+        'display' => $f->format('d/m'),
+        'hoy'     => $f->format('Y-m-d') === date('Y-m-d'),
     ];
 }
-$rangoSemana = 'Semana del ' . $diasSemana[0]['fecha_formateada'] . ' al ' . $diasSemana[5]['fecha_formateada'];
 
-// Obtener asistencias ya guardadas para esta semana
-$asistenciasGuardadas = $asistenciaDAO->obtenerAsistenciasSemana($id, $diasSemana[0]['fecha']);
+$guardados = $asistenciaDAO->obtenerAsistenciasSemana($id, $dias[0]['fecha']);
 
-// Procesar guardado si se envió el formulario
-$mensaje = '';
-$tipoMensaje = '';
+// ── Helper ────────────────────────────────────────────────────────────────
+function getReg(array $guardados, int $apId, string $fecha): ?array {
+    foreach ($guardados[$apId] ?? [] as $r)
+        if ($r['fecha'] === $fecha) return $r;
+    return null;
+}
+
+// ── POST ──────────────────────────────────────────────────────────────────
+$flash = ['msg'=>'','type'=>''];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_asistencia'])) {
     if (!esAdmin() && !esInstructor()) {
-        $tipoMensaje = 'error';
-        $mensaje = 'No tienes permiso para guardar asistencias.';
+        $flash = ['msg'=>'Sin permiso.','type'=>'error'];
     } else {
-        $asistenciasMarcadas = [];
-        $retardosMarcados = [];
-        
-        if (isset($_POST['asistencia']) && is_array($_POST['asistencia'])) {
-            foreach ($_POST['asistencia'] as $aprendizId => $dias) {
-                foreach ($dias as $fecha => $valor) {
-                    if ($valor === 'on') {
-                        if (!isset($asistenciasMarcadas[$aprendizId])) {
-                            $asistenciasMarcadas[$aprendizId] = [];
-                        }
-                        $asistenciasMarcadas[$aprendizId][$fecha] = true;
-                    }
+        $celdas = [];
+        foreach ($aprendices as $ap) {
+            $apId = $ap['APRENDIZ_ID'] ?? null;
+            if (!$apId) continue;
+            foreach ($dias as $d) {
+                $fecha = $d['fecha'];
+                $raw   = $_POST["c_{$apId}_{$fecha}"] ?? 'a';
+                // Mapear valor del select al estado real
+                if (str_starts_with($raw, 'r')) {
+                    $estado = 'retardo';
+                    $horas  = (int)substr($raw, 1);
+                } elseif ($raw === 'f') {
+                    $estado = 'falta';
+                    $horas  = 4;
+                } elseif ($raw === 'e') {
+                    $estado = 'excusa';
+                    $horas  = 0;
+                } else {
+                    // 'a' o cualquier otro = asistio
+                    $estado = 'asistio';
+                    $horas  = 0;
                 }
+                $celdas[$apId][$fecha] = ['estado'=>$estado,'horas'=>$horas];
             }
         }
-        
-        if (isset($_POST['retardo']) && is_array($_POST['retardo'])) {
-            foreach ($_POST['retardo'] as $aprendizId => $dias) {
-                foreach ($dias as $fecha => $horas) {
-                    if ($horas > 0) {
-                        if (!isset($retardosMarcados[$aprendizId])) {
-                            $retardosMarcados[$aprendizId] = [];
-                        }
-                        $retardosMarcados[$aprendizId][$fecha] = (int)$horas;
-                    }
-                }
-            }
-        }
-        
-        $resultado = $asistenciaDAO->guardarAsistenciasSemana(
-            $id, 
-            $diasSemana[0]['fecha'], 
-            $asistenciasMarcadas,
-            $retardosMarcados
-        );
-        
-        if ($resultado) {
-            $tipoMensaje = 'success';
-            $mensaje = 'Asistencia guardada correctamente.';
-            // Recargar las asistencias guardadas
-            $asistenciasGuardadas = $asistenciaDAO->obtenerAsistenciasSemana($id, $diasSemana[0]['fecha']);
+
+        $ok = $asistenciaDAO->guardarAsistenciasSemana($id, $dias[0]['fecha'], $celdas);
+        if ($ok) {
+            $flash    = ['msg'=>'Asistencia guardada.','type'=>'success'];
+            $guardados = $asistenciaDAO->obtenerAsistenciasSemana($id, $dias[0]['fecha']);
         } else {
-            $tipoMensaje = 'error';
-            $mensaje = 'Error al guardar la asistencia: ' . $asistenciaDAO->imprimirError();
+            $flash = ['msg'=>'Error: '.$asistenciaDAO->imprimirError(),'type'=>'error'];
         }
     }
 }
-?>
 
+// ── Totales para barra inferior ───────────────────────────────────────────
+$tAs = $tRe = $tFa = $tEx = $tH = 0;
+foreach ($guardados as $regs)
+    foreach ($regs as $r) {
+        match($r['estado']) {
+            'asistio'=>$tAs++, 'retardo'=>$tRe++,
+            'falta'  =>$tFa++, 'excusa' =>$tEx++,
+            default  =>null
+        };
+        $tH += (int)$r['horas_falta'];
+    }
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asistencia - Ficha <?= htmlspecialchars($ficha['CODIGO_FICHA']) ?></title>
-    <link rel="stylesheet" href="../css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --border-excel: #e0e0e0;
-            --header-excel: #f5f5f5;
-            --hover-excel: #fafafa;
-        }
-        .dark-mode {
-            --border-excel: #404040;
-            --header-excel: #2d2d2d;
-            --hover-excel: #363636;
-        }
-        .asistencia-detalle-header {
-            background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
-            padding: 30px;
-            border-radius: var(--border-radius-card);
-            margin-bottom: 30px;
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        .asistencia-detalle-header h1 {
-            font-size: 28px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .asistencia-detalle-header .btn-volver {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 30px;
-            text-decoration: none;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: background 0.3s;
-        }
-        .asistencia-detalle-header .btn-volver:hover {
-            background: rgba(255,255,255,0.3);
-        }
-        .info-ficha {
-            background: var(--color-blanco);
-            border-radius: var(--border-radius-card);
-            padding: 25px;
-            margin-bottom: 30px;
-            box-shadow: var(--shadow-card);
-            border: 1px solid var(--border-color);
-        }
-        .info-ficha-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }
-        .info-ficha-item {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .info-ficha-item i {
-            font-size: 24px;
-            color: var(--color-verde-1);
-        }
-        .filtro-semana {
-            background: var(--color-blanco);
-            border-radius: var(--border-radius-card);
-            padding: 20px 25px;
-            margin-bottom: 30px;
-            box-shadow: var(--shadow-card);
-            border: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        .filtro-semana .rango {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--color-verde-1);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .filtro-semana .selector {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .filtro-semana .selector label {
-            font-weight: 600;
-            color: var(--color-texto-secundario);
-        }
-        .filtro-semana .selector input[type="week"] {
-            padding: 10px 15px;
-            border: 2px solid var(--border-color);
-            border-radius: var(--border-radius-input);
-            font-size: 14px;
-            background: var(--color-blanco);
-            color: var(--color-texto);
-        }
-        .filtro-semana .selector button {
-            background: var(--color-verde-1);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: var(--border-radius-btn);
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-        }
-        .filtro-semana .selector button:hover {
-            background: var(--color-verde-2);
-            transform: translateY(-2px);
-        }
-        .table-container {
-            background: var(--color-blanco);
-            border-radius: var(--border-radius-card);
-            padding: 20px;
-            box-shadow: var(--shadow-card);
-            border: 1px solid var(--border-color);
-            overflow-x: auto;
-        }
-        .table-container table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1200px;
-        }
-        .table-container th {
-            background: var(--header-excel);
-            color: var(--color-texto);
-            font-weight: 700;
-            padding: 15px;
-            text-align: center;
-            border: 1px solid var(--border-excel);
-        }
-        .table-container td {
-            padding: 12px 15px;
-            border: 1px solid var(--border-excel);
-            text-align: center;
-        }
-        .table-container td:first-child {
-            text-align: left;
-            font-weight: 600;
-            position: sticky;
-            left: 0;
-            background: var(--color-blanco);
-            z-index: 5;
-        }
-        .table-container tr:hover td {
-            background: var(--hover-excel);
-        }
-        .table-container tr:hover td:first-child {
-            background: var(--hover-excel);
-        }
-        .checkbox-asistencia {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            accent-color: var(--color-verde-1);
-        }
-        .select-retardo {
-            width: 70px;
-            padding: 5px;
-            border: 1px solid var(--border-excel);
-            border-radius: 4px;
-            background: var(--color-blanco);
-            color: var(--color-texto);
-            font-size: 13px;
-        }
-        .btn-guardar {
-            background: var(--color-verde-1);
-            color: white;
-            border: none;
-            padding: 15px 40px;
-            border-radius: 50px;
-            font-weight: 700;
-            font-size: 18px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            margin: 30px 0 20px;
-            transition: all 0.3s;
-            box-shadow: 0 5px 15px rgba(57,169,0,0.3);
-        }
-        .btn-guardar:hover {
-            background: var(--color-verde-2);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(57,169,0,0.4);
-        }
-        .acciones {
-            display: flex;
-            justify-content: center;
-        }
-        .resumen-asistencia {
-            margin-top: 20px;
-            padding: 15px;
-            background: var(--color-gris-fondo);
-            border-radius: 8px;
-            display: flex;
-            gap: 30px;
-            font-size: 14px;
-            flex-wrap: wrap;
-        }
-        .resumen-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .resumen-item i {
-            font-size: 18px;
-        }
-        .total-horas {
-            font-weight: 700;
-            color: var(--color-verde-1);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistencia — Ficha <?= htmlspecialchars($ficha['CODIGO_FICHA']) ?></title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+/* ═══════════════════ CABECERA ═══════════════════ */
+.ah {
+    background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
+    border-radius: var(--border-radius-card);
+    padding: 22px 28px;
+    color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 14px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-card);
+}
+.ah h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; margin: 0; }
+.ah-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; opacity: .85; margin-top: 6px; }
+.ah-meta span { display: flex; align-items: center; gap: 5px; }
+.btn-back {
+    background: rgba(255,255,255,.18); color: #fff;
+    padding: 8px 20px; border-radius: 30px; text-decoration: none;
+    font-weight: 700; font-size: 13px; transition: .2s; white-space: nowrap;
+}
+.btn-back:hover { background: rgba(255,255,255,.3); color:#fff; }
+
+/* ═══════════════════ BARRA SEMANA ═══════════════ */
+.sem-bar {
+    background: var(--color-blanco);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-card);
+    padding: 13px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+    margin-bottom: 16px;
+}
+.sem-label { font-size: 14px; font-weight: 700; color: var(--color-verde-1); display:flex;align-items:center;gap:8px; }
+.sem-form  { display: flex; gap: 8px; align-items: center; }
+.sem-form input[type="week"] {
+    padding: 7px 12px; border: 2px solid var(--border-color); border-radius: 8px;
+    font-size: 13px; background: var(--color-blanco); color: var(--color-texto);
+}
+.sem-form input[type="week"]:focus { border-color: var(--color-verde-1); outline: none; }
+
+/* ═══════════════════ LEYENDA ════════════════════ */
+.ley { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+.ley-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-texto-secundario); }
+.chip {
+    width: 32px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800;
+}
+.chip-a { background:#dcfce7; color:#166534; }
+.chip-r { background:#fef3c7; color:#92400e; }
+.chip-f { background:#fee2e2; color:#991b1b; }
+.chip-e { background:#ede9fe; color:#6d28d9; }
+.ley-tip { margin-left:auto; font-size:11px; color:var(--color-texto-secundario); display:flex;align-items:center;gap:4px; }
+
+/* ═══════════════════ TABLA EXCEL ════════════════ */
+.xl-wrap {
+    background: var(--color-blanco);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-card);
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+}
+.xl-scroll { overflow-x: auto; }
+
+.xl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+/* Cabecera días */
+.xl-table thead th {
+    background: var(--color-verde-1);
+    color: #fff;
+    padding: 11px 8px;
+    text-align: center;
+    font-weight: 800;
+    font-size: 12px;
+    border-right: 1px solid rgba(255,255,255,.15);
+    white-space: nowrap;
+    user-select: none;
+}
+.xl-table thead th.th-ap {
+    background: #1a2e1a;
+    text-align: left;
+    padding-left: 16px;
+    min-width: 210px;
+    position: sticky; left: 0; z-index: 10;
+}
+.xl-table thead th.th-hoy {
+    background: #2d8000;
+    box-shadow: inset 0 -3px 0 rgba(255,255,255,.4);
+}
+
+/* Filas */
+.xl-table tbody tr { border-bottom: 1px solid var(--border-color); }
+.xl-table tbody tr:last-child { border-bottom: none; }
+.xl-table tbody tr:hover td { background: rgba(57,169,0,.03); }
+.xl-table tbody tr:hover .td-ap { background: rgba(57,169,0,.06); }
+
+/* Columna nombre */
+.td-ap {
+    position: sticky; left: 0; z-index: 5;
+    background: var(--color-blanco);
+    border-right: 2px solid var(--border-color);
+    padding: 9px 14px;
+    min-width: 210px;
+    transition: background .15s;
+}
+.ap-cell { display: flex; align-items: center; gap: 9px; }
+.ap-av {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
+    color: #fff; font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+}
+.ap-nm { font-weight: 700; font-size: 13px; color: var(--color-texto); line-height: 1.2; }
+.ap-dc { font-size: 11px; color: var(--color-texto-secundario); }
+
+/* Celda día */
+.td-dia {
+    padding: 7px 5px;
+    text-align: center;
+    border-right: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.td-dia:last-child { border-right: none; }
+.td-hoy { background: rgba(57,169,0,.05) !important; }
+
+/* ════ SELECT — el corazón ════ */
+.xl-sel {
+    width: 74px; padding: 7px 2px;
+    border: none; border-radius: 9px;
+    font-size: 13px; font-weight: 800; text-align: center;
+    cursor: pointer; outline: none;
+    -webkit-appearance: none; appearance: none;
+    transition: transform .12s, box-shadow .15s;
+}
+.xl-sel:hover  { transform: scale(1.07); }
+.xl-sel:focus  { box-shadow: 0 0 0 3px rgba(57,169,0,.3); transform: scale(1.07); }
+
+/* Paleta clara */
+.s-a  { background: #dcfce7; color: #166534; }   /* asistió */
+.s-r1 { background: #fef9c3; color: #854d0e; }   /* retardo 1h */
+.s-r2 { background: #fef3c7; color: #92400e; }   /* retardo 2h */
+.s-r3 { background: #fde68a; color: #78350f; }   /* retardo 3h */
+.s-r4 { background: #fcd34d; color: #78350f; }   /* retardo 4h */
+.s-f  { background: #fee2e2; color: #991b1b; }   /* falta */
+.s-e  { background: #ede9fe; color: #6d28d9; }   /* excusa */
+
+/* Sub-info debajo del select */
+.cel-sub {
+    font-size: 9.5px; margin-top: 3px;
+    color: var(--color-texto-secundario);
+    line-height: 1.2; white-space: nowrap;
+}
+.cel-venc { color: #dc2626; font-weight: 700; }
+
+/* ═══════════════════ BARRA RESUMEN ══════════════ */
+.res-bar {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    padding: 13px 20px;
+    background: var(--color-gris-fondo);
+    border-top: 1px solid var(--border-color);
+    align-items: center;
+}
+.res-chip { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
+.res-dot  { width: 10px; height: 10px; border-radius: 50%; }
+
+/* ═══════════════════ BTN GUARDAR ════════════════ */
+.btn-gd {
+    background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
+    color: #fff; border: none;
+    padding: 14px 38px; border-radius: 40px;
+    font-weight: 800; font-size: 15px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    transition: .2s;
+    box-shadow: 0 4px 16px rgba(57,169,0,.3);
+}
+.btn-gd:hover { transform: translateY(-2px); box-shadow: 0 8px 26px rgba(57,169,0,.4); }
+
+/* ═══════════════════ DARK MODE ══════════════════ */
+.dark-mode .xl-wrap       { background: var(--color-gris-cuerpo); }
+.dark-mode .td-ap         { background: var(--color-gris-cuerpo); }
+.dark-mode .sem-bar       { background: var(--color-gris-cuerpo); }
+.dark-mode .s-a  { background:#14532d; color:#bbf7d0; }
+.dark-mode .s-r1 { background:#3b1f00; color:#fef9c3; }
+.dark-mode .s-r2 { background:#451a03; color:#fde68a; }
+.dark-mode .s-r3 { background:#4c1f00; color:#fcd34d; }
+.dark-mode .s-r4 { background:#78350f; color:#fef3c7; }
+.dark-mode .s-f  { background:#7f1d1d; color:#fecaca; }
+.dark-mode .s-e  { background:#4c1d95; color:#ddd6fe; }
+</style>
 </head>
 <body>
-    <div id="loader">
-        <img src="../img/logo_sena_verde.png" alt="Logo SENA" id="loader-logo">
+<div id="loader"><img src="../img/logo_sena_verde.png" alt="" id="loader-logo"></div>
+<?php include '../config/header.php'; ?>
+
+<main class="container" id="contenido-principal" style="display:none;opacity:0;">
+
+    <!-- Cabecera -->
+    <div class="ah">
+        <div>
+            <h1><i class="fas fa-table"></i> Asistencia — Ficha <?= htmlspecialchars($ficha['CODIGO_FICHA']) ?></h1>
+            <div class="ah-meta">
+                <span><i class="fas fa-graduation-cap"></i><?= htmlspecialchars($ficha['programa_nombre'] ?? '') ?></span>
+                <span><i class="fas fa-users"></i><?= count($aprendices) ?> aprendices</span>
+                <span><i class="fas fa-calendar-week"></i>
+                    <?= date('d/m', strtotime($dias[0]['fecha'])) ?> –
+                    <?= date('d/m/Y', strtotime(end($dias)['fecha'])) ?>
+                </span>
+            </div>
+        </div>
+        <a href="asistencias.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver</a>
     </div>
 
-    <?php include "../config/header.php"; ?>
-
-    <main class="container" id="contenido-principal" style="display:none; opacity:0;">
-        <div class="asistencia-detalle-header">
-            <h1>
-                <i class="fas fa-clipboard-list"></i> Asistencia - Ficha <?= htmlspecialchars($ficha['CODIGO_FICHA']) ?>
-            </h1>
-            <a href="asistencias.php" class="btn-volver">
-                <i class="fas fa-arrow-left"></i> Volver a fichas
-            </a>
+    <!-- Selector semana -->
+    <div class="sem-bar">
+        <div class="sem-label"><i class="fas fa-calendar-week"></i>
+            Semana del <?= date('d/m/Y', strtotime($dias[0]['fecha'])) ?>
+            al <?= date('d/m/Y', strtotime(end($dias)['fecha'])) ?>
         </div>
-
-        <div class="info-ficha">
-            <h2 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-info-circle"></i> Detalles de la ficha
-            </h2>
-            <div class="info-ficha-grid">
-                <div class="info-ficha-item">
-                    <i class="fas fa-graduation-cap"></i>
-                    <div>
-                        <strong>Programa</strong><br>
-                        <?= htmlspecialchars($ficha['programa_nombre']) ?>
-                    </div>
-                </div>
-                <div class="info-ficha-item">
-                    <i class="fas fa-calendar-alt"></i>
-                    <div>
-                        <strong>Inicio</strong><br>
-                        <?= date('d/m/Y', strtotime($ficha['FECHA_INICIO'])) ?>
-                    </div>
-                </div>
-                <div class="info-ficha-item">
-                    <i class="fas fa-calendar-check"></i>
-                    <div>
-                        <strong>Fin</strong><br>
-                        <?= date('d/m/Y', strtotime($ficha['FECHA_FIN'])) ?>
-                    </div>
-                </div>
-                <div class="info-ficha-item">
-                    <i class="fas fa-users"></i>
-                    <div>
-                        <strong>Aprendices</strong><br>
-                        <?= $ficha['total_aprendices'] ?>
-                    </div>
-                </div>
-                <div class="info-ficha-item">
-                    <i class="fas fa-circle"></i>
-                    <div>
-                        <strong>Estado</strong><br>
-                        <?= htmlspecialchars($ficha['ESTADO']) ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="filtro-semana">
-            <div class="rango">
-                <i class="fas fa-calendar-week"></i> <?= $rangoSemana ?>
-            </div>
-            <form method="GET" action="" class="selector">
-                <input type="hidden" name="id" value="<?= $id ?>">
-                <label for="semana"><i class="fas fa-calendar-alt"></i> Seleccionar semana:</label>
-                <input type="week" name="semana" id="semana" value="<?= $semanaSeleccionada ?>" required>
-                <button type="submit">
-                    <i class="fas fa-filter"></i> Filtrar
-                </button>
-            </form>
-        </div>
-
-        <form method="POST" action="" id="form-asistencia">
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Aprendiz</th>
-                            <?php foreach ($diasSemana as $dia): ?>
-                                <th colspan="2">
-                                    <?= $dia['nombre'] ?><br>
-                                    <small style="font-weight: normal;"><?= $dia['fecha_formateada'] ?></small>
-                                </th>
-                            <?php endforeach; ?>
-                        </tr>
-                        <tr>
-                            <th></th>
-                            <?php foreach ($diasSemana as $dia): ?>
-                                <th>Asistió</th>
-                                <th>Llegó tarde</th>
-                            <?php endforeach; ?>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($aprendices)): ?>
-                            <tr>
-                                <td colspan="<?= (count($diasSemana) * 2) + 1 ?>" class="empty-state">
-                                    <i class="fas fa-user-slash"></i> No hay aprendices en esta ficha
-                                </td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($aprendices as $a): 
-                                $aprendizId = $a['APRENDIZ_ID'];
-                            ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($a['NOMBRES'] . ' ' . $a['APELLIDOS']) ?></td>
-                                    <?php foreach ($diasSemana as $dia): 
-                                        $fecha = $dia['fecha'];
-                                        $asistio = false;
-                                        $retardoHoras = 0;
-                                        
-                                        if (isset($asistenciasGuardadas[$aprendizId])) {
-                                            foreach ($asistenciasGuardadas[$aprendizId] as $reg) {
-                                                if ($reg['fecha'] == $fecha) {
-                                                    if ($reg['estado'] == 'asistio') {
-                                                        $asistio = true;
-                                                        $retardoHoras = 0;
-                                                    } elseif ($reg['estado'] == 'retardo') {
-                                                        $asistio = false;
-                                                        $retardoHoras = $reg['horas_falta'];
-                                                    } elseif ($reg['estado'] == 'falta') {
-                                                        $asistio = false;
-                                                        $retardoHoras = 0;
-                                                    }
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    ?>
-                                        <td>
-                                            <input type="checkbox" 
-                                                   name="asistencia[<?= $aprendizId ?>][<?= $fecha ?>]" 
-                                                   class="checkbox-asistencia"
-                                                   <?= $asistio ? 'checked' : '' ?>
-                                                   onchange="actualizarRetardo(this, <?= $aprendizId ?>, '<?= $fecha ?>')">
-                                        </td>
-                                        <td>
-                                            <select name="retardo[<?= $aprendizId ?>][<?= $fecha ?>]" 
-                                                    class="select-retardo"
-                                                    id="retardo_<?= $aprendizId ?>_<?= str_replace('-', '_', $fecha) ?>"
-                                                    onchange="actualizarAsistencia(this, <?= $aprendizId ?>, '<?= $fecha ?>')">
-                                                <option value="0" <?= $retardoHoras == 0 ? 'selected' : '' ?>>0h</option>
-                                                <option value="1" <?= $retardoHoras == 1 ? 'selected' : '' ?>>1h</option>
-                                                <option value="2" <?= $retardoHoras == 2 ? 'selected' : '' ?>>2h</option>
-                                                <option value="3" <?= $retardoHoras == 3 ? 'selected' : '' ?>>3h</option>
-                                                <option value="4" <?= $retardoHoras == 4 ? 'selected' : '' ?>>4h</option>
-                                            </select>
-                                        </td>
-                                    <?php endforeach; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="resumen-asistencia" id="resumenHoras">
-                <div class="resumen-item">
-                    <i class="fas fa-check-circle" style="color: var(--color-verde-1);"></i>
-                    <span>Asistencias: <strong id="total-asistencias">0</strong></span>
-                </div>
-                <div class="resumen-item">
-                    <i class="fas fa-clock" style="color: #f59e0b;"></i>
-                    <span>Retardos: <strong id="total-retardos">0</strong> ( <span id="horas-retardo">0</span>h )</span>
-                </div>
-                <div class="resumen-item">
-                    <i class="fas fa-times-circle" style="color: #dc2626;"></i>
-                    <span>Faltas: <strong id="total-faltas">0</strong> ( <span id="horas-falta">0</span>h )</span>
-                </div>
-                <div class="resumen-item">
-                    <i class="fas fa-hourglass-half" style="color: var(--color-verde-1);"></i>
-                    <span>Total horas inasistencia: <strong class="total-horas" id="total-horas-inasistencia">0</strong>h</span>
-                </div>
-            </div>
-
-            <?php if (!empty($aprendices) && (esAdmin() || esInstructor())): ?>
-            <div class="acciones">
-                <button type="submit" name="guardar_asistencia" class="btn-guardar">
-                    <i class="fas fa-save"></i> Guardar Asistencia
-                </button>
-            </div>
-            <?php endif; ?>
+        <form method="GET" class="sem-form">
+            <input type="hidden" name="id" value="<?= $id ?>">
+            <input type="week" name="semana" value="<?= htmlspecialchars($semSel) ?>" required>
+            <button type="submit" class="btn-action" style="padding:7px 16px;font-size:13px;">
+                <i class="fas fa-filter"></i> Ir
+            </button>
         </form>
+    </div>
 
-        <?php if ($mensaje): ?>
-        <script>
-            Swal.fire({
-                icon: '<?= $tipoMensaje ?>',
-                title: '<?= $tipoMensaje === 'success' ? '¡Éxito!' : 'Error' ?>',
-                text: '<?= htmlspecialchars($mensaje) ?>',
-                timer: 3000,
-                showConfirmButton: false
-            });
-        </script>
-        <?php endif; ?>
-    </main>
+    <!-- Tabla tipo Excel -->
+    <form method="POST" id="form-asis" action="asistencias_detalle.php?id=<?= $id ?>&semana=<?= htmlspecialchars($semSel) ?>">
+    <div class="xl-wrap">
+      <div class="xl-scroll">
+        <table class="xl-table">
+          <thead>
+            <tr>
+              <th class="th-ap">Aprendiz</th>
+              <?php foreach ($dias as $d): ?>
+                <th class="<?= $d['hoy'] ? 'th-hoy' : '' ?>">
+                  <?= $d['nombre'] ?><br>
+                  <span style="font-size:11px;font-weight:500;opacity:.85;"><?= $d['display'] ?></span>
+                  <?php if ($d['hoy']): ?>
+                    <br><span style="font-size:9px;background:rgba(255,255,255,.25);padding:1px 6px;border-radius:6px;letter-spacing:.5px;">HOY</span>
+                  <?php endif; ?>
+                </th>
+              <?php endforeach; ?>
+            </tr>
+          </thead>
+          <tbody>
+          <?php if (empty($aprendices)): ?>
+            <tr>
+              <td colspan="<?= count($dias)+1 ?>"
+                  style="text-align:center;padding:50px;color:var(--color-texto-secundario);">
+                <i class="fas fa-users-slash" style="font-size:32px;opacity:.2;display:block;margin-bottom:10px;"></i>
+                No hay aprendices en esta ficha
+              </td>
+            </tr>
+          <?php else: ?>
+            <?php foreach ($aprendices as $ap):
+                $apId = (int)$ap['APRENDIZ_ID'];
+                $ini  = strtoupper(substr($ap['NOMBRES'],0,1).substr($ap['APELLIDOS'],0,1));
+            ?>
+            <tr>
+              <!-- Nombre -->
+              <td class="td-ap">
+                <div class="ap-cell">
+                  <div class="ap-av"><?= $ini ?></div>
+                  <div>
+                    <a href="aprendiz_detalle.php?id=<?= $apId ?>"
+                     class="ap-nm"
+                     style="text-decoration:none;color:var(--color-texto);transition:color .15s;"
+                     onmouseover="this.style.color='var(--color-verde-1)'"
+                     onmouseout="this.style.color='var(--color-texto)'"
+                     title="Ver detalle del aprendiz"
+                     onclick="event.stopPropagation();">
+                    <?= htmlspecialchars($ap['NOMBRES'].' '.$ap['APELLIDOS']) ?>
+                    <i class="fas fa-external-link-alt" style="font-size:9px;opacity:.5;margin-left:3px;"></i>
+                  </a>
+                    <div class="ap-dc"><?= htmlspecialchars($ap['TIPO_DOCUMENTO'].' '.$ap['NUMERO_DOCUMENTO']) ?></div>
+                  </div>
+                </div>
+              </td>
 
-    <?php include "../config/footer.php"; ?>
+              <!-- Celdas días -->
+              <?php foreach ($dias as $d):
+                  $fecha   = $d['fecha'];
+                  $reg     = getReg($guardados, $apId, $fecha);
+                  $estado  = $reg['estado']              ?? 'asistio';
+                  $horas   = (int)($reg['horas_falta']   ?? 0);
+                  $excusa  = $reg['excusa_presentada']   ?? false;
+                  $limite  = $reg['fecha_limite_excusa'] ?? null;
+                  $vencida = $limite && date('Y-m-d') > $limite && $estado === 'falta';
 
-    <script src="../js/tema.js"></script>
-    <script src="../js/loader.js"></script>
-    <script src="../js/panel_menu.js"></script>
-    <script src="../js/dropdowns.js"></script>
-    <script src="../js/profile_menu.js"></script>
-    <script src="../js/sweetalerts.js"></script>
-    <script src="../js/menu.js"></script>
+                  // Valor del select: a | r1 | r2 | r3 | r4 | f | e
+                  $sv = match($estado) {
+                      'retardo' => 'r'.$horas,
+                      'falta'   => 'f',
+                      'excusa'  => 'e',
+                      default   => 'a',
+                  };
+                  // Clase CSS
+                  $sc = match($sv) {
+                      'r1'=>'s-r1','r2'=>'s-r2','r3'=>'s-r3','r4'=>'s-r4',
+                      'f' =>'s-f', 'e' =>'s-e', default=>'s-a',
+                  };
+                  $name = "c_{$apId}_{$fecha}";
+              ?>
+              <td class="td-dia <?= $d['hoy'] ? 'td-hoy' : '' ?>">
 
-    <script>
-        function actualizarResumen() {
-            let totalAsistencias = 0;
-            let totalRetardos = 0;
-            let horasRetardo = 0;
-            
-            document.querySelectorAll('.checkbox-asistencia').forEach(cb => {
-                if (cb.checked) {
-                    totalAsistencias++;
-                }
-            });
-            
-            document.querySelectorAll('.select-retardo').forEach(select => {
-                let horas = parseInt(select.value);
-                if (horas > 0) {
-                    totalRetardos++;
-                    horasRetardo += horas;
-                }
-            });
-            
-            let totalDias = document.querySelectorAll('.checkbox-asistencia').length;
-            let totalFaltas = totalDias - totalAsistencias - totalRetardos;
-            let horasFalta = totalFaltas * 4;
-            
-            document.getElementById('total-asistencias').textContent = totalAsistencias;
-            document.getElementById('total-retardos').textContent = totalRetardos;
-            document.getElementById('horas-retardo').textContent = horasRetardo;
-            document.getElementById('total-faltas').textContent = totalFaltas;
-            document.getElementById('horas-falta').textContent = horasFalta;
-            document.getElementById('total-horas-inasistencia').textContent = horasRetardo + horasFalta;
-        }
+                <select name="<?= $name ?>" id="<?= $name ?>"
+                        class="xl-sel <?= $sc ?>"
+                        onchange="upd(this)"
+                        <?= ($estado==='excusa'&&$excusa) ? 'title="Excusa presentada"' : '' ?>>
+                  <option value="a"  <?= $sv==='a'  ?'selected':'' ?>>✓ Asistió</option>
+                  <option value="r1" <?= $sv==='r1' ?'selected':'' ?>>⏱ 1h</option>
+                  <option value="r2" <?= $sv==='r2' ?'selected':'' ?>>⏱ 2h</option>
+                  <option value="r3" <?= $sv==='r3' ?'selected':'' ?>>⏱ 3h</option>
+                  <option value="r4" <?= $sv==='r4' ?'selected':'' ?>>⏱ 4h</option>
+                  <option value="f"  <?= $sv==='f'  ?'selected':'' ?>>✗ Falta</option>
+                  <option value="e"  <?= $sv==='e'  ?'selected':'' ?>>E Excusa</option>
+                </select>
 
-        function actualizarRetardo(checkbox, aprendizId, fecha) {
-            let selectId = 'retardo_' + aprendizId + '_' + fecha.replace(/-/g, '_');
-            let select = document.getElementById(selectId);
-            if (select && checkbox.checked) {
-                select.value = '0';
-            }
-            actualizarResumen();
-        }
+                <!-- Sub-info: fecha límite excusa o badge vencido -->
+                <?php if ($vencida): ?>
+                  <div class="cel-sub cel-venc"><i class="fas fa-lock"></i> Plazo vencido</div>
+                <?php elseif ($estado==='falta' && $limite): ?>
+                  <div class="cel-sub">Excusa hasta<br><?= date('d/m', strtotime($limite)) ?></div>
+                <?php endif; ?>
 
-        function actualizarAsistencia(select, aprendizId, fecha) {
-            let checkboxName = `asistencia[${aprendizId}][${fecha}]`;
-            let checkbox = document.querySelector(`input[name="${checkboxName}"]`);
-            if (checkbox && select.value > 0) {
-                checkbox.checked = false;
-            }
-            actualizarResumen();
-        }
+              </td>
+              <?php endforeach; ?>
+            </tr>
+            <?php endforeach; ?>
+          <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
 
-        document.querySelectorAll('.checkbox-asistencia, .select-retardo').forEach(el => {
-            el.addEventListener('change', actualizarResumen);
-        });
-        
-        actualizarResumen();
+      <!-- Barra resumen en tiempo real -->
+      <div class="res-bar">
+        <div class="res-chip"><div class="res-dot" style="background:#16a34a;"></div>Asistencias: <strong id="rAs"><?= $tAs ?></strong></div>
+        <div class="res-chip"><div class="res-dot" style="background:#f59e0b;"></div>Retardos: <strong id="rRe"><?= $tRe ?></strong></div>
+        <div class="res-chip"><div class="res-dot" style="background:#dc2626;"></div>Faltas: <strong id="rFa"><?= $tFa ?></strong></div>
+        <div class="res-chip"><div class="res-dot" style="background:#7c3aed;"></div>Excusas: <strong id="rEx"><?= $tEx ?></strong></div>
+        <div class="res-chip" style="margin-left:auto;">
+          <i class="fas fa-hourglass-half" style="color:var(--color-texto-secundario);"></i>
+          Horas inasistencia: <strong id="rH"><?= $tH ?>h</strong>
+        </div>
+      </div>
+    </div>
 
-        if (typeof initThemeToggle === 'function') {
-            setTimeout(initThemeToggle, 100);
-        }
-    </script>
+    <?php if (!empty($aprendices) && (esAdmin()||esInstructor())): ?>
+    <div style="display:flex;justify-content:center;margin-top:22px;">
+      <button type="submit" name="guardar_asistencia" class="btn-gd">
+        <i class="fas fa-save"></i> Guardar asistencia
+      </button>
+    </div>
+    <?php endif; ?>
+    </form>
+
+</main>
+
+<?php include '../config/footer.php'; ?>
+
+<script src="../js/tema.js"></script>
+<script src="../js/loader.js"></script>
+<script src="../js/panel_menu.js"></script>
+<script src="../js/dropdowns.js"></script>
+<script src="../js/profile_menu.js"></script>
+<script src="../js/sweetalerts.js"></script>
+<script src="../js/menu.js"></script>
+<script>
+// ── Mapa valor → clase CSS ──────────────────────────────────────────────
+const CM = { a:'s-a', r1:'s-r1', r2:'s-r2', r3:'s-r3', r4:'s-r4', f:'s-f', e:'s-e' };
+const ALL = Object.values(CM);
+
+function upd(sel) {
+    ALL.forEach(c => sel.classList.remove(c));
+    sel.classList.add(CM[sel.value] || 's-a');
+    recalc();
+}
+
+// ── Recalcular resumen ──────────────────────────────────────────────────
+function recalc() {
+    let as=0, re=0, fa=0, ex=0, h=0;
+    document.querySelectorAll('.xl-sel').forEach(s => {
+        const v = s.value;
+        if      (v==='a')             { as++; }
+        else if (v.startsWith('r'))   { re++; h += parseInt(v[1]); }
+        else if (v==='f')             { fa++; h += 4; }
+        else if (v==='e')             { ex++; }
+    });
+    document.getElementById('rAs').textContent = as;
+    document.getElementById('rRe').textContent = re;
+    document.getElementById('rFa').textContent = fa;
+    document.getElementById('rEx').textContent = ex;
+    document.getElementById('rH').textContent  = h+'h';
+}
+
+// ── Atajos teclado (solo cuando el select está en foco) ────────────────
+document.addEventListener('keydown', e => {
+    const s = document.activeElement;
+    if (!s || !s.classList.contains('xl-sel')) return;
+    const map = { a:'a', f:'f', e:'e', '1':'r1','2':'r2','3':'r3','4':'r4' };
+    if (map[e.key]) { e.preventDefault(); s.value = map[e.key]; upd(s); }
+});
+
+// ── Flash post-submit ──────────────────────────────────────────────────
+<?php if ($flash['msg']): ?>
+Swal.fire({
+    icon: '<?= $flash['type'] ?>',
+    title: '<?= $flash['type']==='success' ? '¡Guardado!' : 'Error' ?>',
+    text: '<?= addslashes($flash['msg']) ?>',
+    timer: 2400, showConfirmButton: false,
+    toast: true, position: 'top-end',
+});
+<?php endif; ?>
+
+recalc();
+</script>
 </body>
 </html>

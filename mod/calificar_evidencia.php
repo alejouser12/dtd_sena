@@ -3,6 +3,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../conexion/EvidenciaDAO.php';
 
 $dao = new EvidenciaDAO();
@@ -18,8 +19,22 @@ if (!$evidencia) {
     exit;
 }
 
+// Validar permisos: instructor solo puede calificar si la ficha le pertenece
+if (!esAdmin()) {
+    $instructorId = $_SESSION['usuario_id'] ?? null;
+    if (!$instructorId || !$dao->instructorPuedeCalificar($instructorId, $id)) {
+        header('Location: evidencias.php?error=sin_permiso');
+        exit;
+    }
+}
+
 $aprendices = $dao->obtenerAprendicesPorFicha($evidencia['ficha_id']);
 $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
+// Indexar por aprendiz_id
+$califMap = [];
+foreach ($calificacionesGuardadas as $c) {
+    $califMap[$c['APRENDIZ_ID']] = $c;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -33,15 +48,42 @@ $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         .tabla-calificaciones input[type="number"] {
-            width: 80px;
-            padding: 5px;
+            width: 100px;
+            padding: 8px;
         }
-        .tabla-calificaciones select {
-            width: 120px;
-            padding: 5px;
+        .estado-aprobado {
+            background: #dcfce7;
+            color: #16a34a;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
         }
-        .estado-badge.aprobado { background: #dcfce7; color: #16a34a; }
-        .estado-badge.desaprobado { background: #fee2e2; color: #dc2626; }
+        .estado-desaprobado {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .estado-sin-calificar {
+            background: #f3f4f6;
+            color: #6b7280;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .info-evidencia {
+            background: var(--color-gris-fondo);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-evidencia p {
+            margin: 5px 0;
+        }
     </style>
 </head>
 <body>
@@ -62,10 +104,12 @@ $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
             <h1 class="page-title">
                 <i class="fas fa-star"></i> Calificar Evidencia
             </h1>
-            <p class="page-subtitle">
-                Evidencia: <strong><?= htmlspecialchars($evidencia['nombre']) ?></strong> - 
-                Ficha: <?= htmlspecialchars($evidencia['CODIGO_FICHA']) ?>
-            </p>
+            <div class="info-evidencia">
+                <p><strong>Evidencia:</strong> <?= htmlspecialchars($evidencia['nombre']) ?></p>
+                <p><strong>Ficha:</strong> <?= htmlspecialchars($evidencia['CODIGO_FICHA']) ?></p>
+                <p><strong>Porcentaje:</strong> <?= $evidencia['porcentaje'] ? number_format($evidencia['porcentaje'], 2).'%' : '-' ?></p>
+                <p><strong>Fecha límite:</strong> <?= date('d/m/Y', strtotime($evidencia['tiempo_entrega'])) ?></p>
+            </div>
         </div>
 
         <div class="content-card">
@@ -73,7 +117,7 @@ $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
                 <h2 class="card-title">Aprendices de la ficha</h2>
             </div>
             <div class="card-body">
-                <form method="POST" action="guardar_calificaciones.php" id="form-calificaciones">
+                <form method="POST" action="guardar_calificaciones.php">
                     <input type="hidden" name="evidencia_id" value="<?= $id ?>">
                     <div class="table-container">
                         <table class="data-table tabla-calificaciones">
@@ -81,7 +125,7 @@ $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
                                 <tr>
                                     <th>Aprendiz</th>
                                     <th>Documento</th>
-                                    <th>Calificación (opcional)</th>
+                                    <th>Calificación (0-5)</th>
                                     <th>Estado</th>
                                 </tr>
                             </thead>
@@ -93,10 +137,22 @@ $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
                                     </td>
                                 </tr>
                                 <?php else: ?>
-                                    <?php foreach ($aprendices as $a): 
-                                        $guardado = $calificacionesGuardadas[$a['APRENDIZ_ID']] ?? null;
-                                        $estado = $guardado ? $guardado['estado_aprobacion'] : '';
+                                    <?php foreach ($aprendices as $a):
+                                        $guardado = $califMap[$a['APRENDIZ_ID']] ?? null;
                                         $calif = $guardado ? $guardado['calificacion'] : '';
+                                        $estado = $guardado ? $guardado['estado_aprobacion'] : '';
+                                        $estadoTexto = '';
+                                        $estadoClase = '';
+                                        if ($estado === 'aprobado') {
+                                            $estadoTexto = 'Aprobado';
+                                            $estadoClase = 'estado-aprobado';
+                                        } elseif ($estado === 'desaprobado') {
+                                            $estadoTexto = 'Desaprobado';
+                                            $estadoClase = 'estado-desaprobado';
+                                        } else {
+                                            $estadoTexto = 'Sin calificar';
+                                            $estadoClase = 'estado-sin-calificar';
+                                        }
                                     ?>
                                     <tr>
                                         <td><?= htmlspecialchars($a['NOMBRES'] . ' ' . $a['APELLIDOS']) ?></td>
@@ -105,14 +161,13 @@ $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
                                             <input type="number" step="0.1" min="0" max="5" 
                                                    name="calificacion[<?= $a['APRENDIZ_ID'] ?>]" 
                                                    value="<?= htmlspecialchars($calif) ?>"
-                                                   placeholder="0-5">
+                                                   placeholder="0-5"
+                                                   class="form-control">
                                         </td>
                                         <td>
-                                            <select name="estado[<?= $a['APRENDIZ_ID'] ?>]" class="form-control">
-                                                <option value="">Seleccionar</option>
-                                                <option value="aprobado" <?= $estado == 'aprobado' ? 'selected' : '' ?>>Aprobado</option>
-                                                <option value="desaprobado" <?= $estado == 'desaprobado' ? 'selected' : '' ?>>Desaprobado</option>
-                                            </select>
+                                            <span id="estado-<?= $a['APRENDIZ_ID'] ?>" class="<?= $estadoClase ?>">
+                                                <?= $estadoTexto ?>
+                                            </span>
                                         </td>
                                     </tr>
                                     <?php endforeach; ?>
@@ -138,5 +193,30 @@ $calificacionesGuardadas = $dao->obtenerCalificaciones($id);
     <script src="../js/profile_menu.js"></script>
     <script src="../js/sweetalerts.js"></script>
     <script src="../js/menu.js"></script>
+
+    <script>
+        // Actualizar estado en tiempo real según la calificación ingresada
+        const inputs = document.querySelectorAll('input[name^="calificacion"]');
+        inputs.forEach(input => {
+            input.addEventListener('input', function() {
+                const nota = parseFloat(this.value);
+                const span = this.closest('tr').querySelector('td:last-child span');
+                if (isNaN(nota)) {
+                    span.textContent = 'Sin calificar';
+                    span.className = 'estado-sin-calificar';
+                } else if (nota >= 3) {
+                    span.textContent = 'Aprobado';
+                    span.className = 'estado-aprobado';
+                } else {
+                    span.textContent = 'Desaprobado';
+                    span.className = 'estado-desaprobado';
+                }
+            });
+        });
+
+        if (typeof initThemeToggle === 'function') {
+            setTimeout(initThemeToggle, 100);
+        }
+    </script>
 </body>
 </html>

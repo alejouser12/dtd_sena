@@ -29,6 +29,13 @@ function esInstructor() {
 }
 
 /**
+ * Verifica si el usuario es aprendiz
+ */
+function esAprendiz() {
+    return tieneRol(ROL_APRENDIZ);
+}
+
+/**
  * Verifica si el usuario puede crear nuevos registros en un módulo
  * @param string $modulo Nombre del módulo (ej. 'aprendices', 'programas', etc.)
  */

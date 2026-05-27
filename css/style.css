@@ -96,8 +96,8 @@ html {
 body {
   position: relative;
   min-height: 100vh;
-  padding-top: 150px;
-  padding-bottom: 140px;
+  padding-top: 150px;      /* ← ajusta según tu header */
+  padding-bottom: 0;       /* ← ELIMINA el padding inferior (antes 140px) */
   font-family: var(--font-main);
   background: linear-gradient(135deg, var(--color-gris-fondo), var(--color-gris-cuerpo));
   color: var(--color-texto);
@@ -853,16 +853,15 @@ input:focus, select:focus, textarea:focus {
 
 /* === FOOTER === */
 .footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  z-index: 900;
   background: var(--color-blanco);
   border-top: 1px solid var(--border-color);
-  padding: var(--spacing-lg) 0;
+  padding: 12px 0;
   text-align: center;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+  margin-top: 40px;
+   margin-bottom: 0;
+  width: 100%;
+  clear: both;
+  position: relative;  /* importante: NO fixed */
 }
 
 .footer-content {
@@ -873,7 +872,7 @@ input:focus, select:focus, textarea:focus {
 
 .footer p {
   color: var(--color-texto-secundario);
-  font-size: 14px;
+  font-size: 13px;
   margin: 4px 0;
 }
 
@@ -881,14 +880,14 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   justify-content: center;
   gap: 20px;
-  margin-top: 15px;
+  margin-top: 8px;
 }
 
 .footer-links a {
   color: var(--color-verde-1);
   text-decoration: none;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -902,7 +901,6 @@ input:focus, select:focus, textarea:focus {
   background: var(--color-blanco);
   border-top-color: var(--border-color);
 }
-
 /* === MENÚ DE PERFIL === */
 .profile-container {
   position: relative;

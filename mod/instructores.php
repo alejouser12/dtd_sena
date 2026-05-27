@@ -42,7 +42,7 @@ if (!empty($buscar)) {
                 <p class="page-subtitle">Gestión de instructores del SENA</p>
             </div>
             <?php if (esAdmin()): ?>
-            <a href="crear_instructor.php" class="btn-create">
+            <a href="crud/crear_instructor.php" class="btn-create">
                 <i class="fas fa-plus"></i> Nuevo Instructor
             </a>
             <?php endif; ?>
@@ -96,7 +96,7 @@ if (!empty($buscar)) {
                         </a>
                         <?php if (esAdmin()): ?>
                         <div style="display: flex; gap: 5px; margin-top: 10px;" onclick="event.stopPropagation();">
-                            <a href="editar_instructor.php?id=<?= $ins['INSTRUCTOR_ID'] ?>" class="btn-edit" style="padding: 5px 10px;">
+                            <a href="crud/editar_instructor.php?id=<?= $ins['INSTRUCTOR_ID'] ?>" class="btn-edit" style="padding: 5px 10px;">
                                 <i class="fas fa-edit"></i>
                             </a>
                             <a href="#" class="btn-delete" style="padding: 5px 10px;" onclick="confirmarEliminacion(<?= $ins['INSTRUCTOR_ID'] ?>)">
@@ -133,7 +133,7 @@ if (!empty($buscar)) {
                 reverseButtons: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = 'eliminar_instructor.php?id=' + id;
+                    window.location.href = 'crud/eliminar_instructor.php?id=' + id;
                 }
             });
         }

@@ -4,13 +4,12 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../conexion/AlertaDAO.php';
 require_once __DIR__ . '/app.php';
-require_once __DIR__ . '/permissions.php'; // Para usar las funciones de permisos
+require_once __DIR__ . '/permissions.php';
 
 $alertaDAO = new AlertaDAO();
 $conteoAlertas = $alertaDAO->obtenerConteoAlertas();
 $totalAlertas = $conteoAlertas['total'] ?? 0;
 
-// Obtener datos del usuario desde la sesión
 $nombreUsuario = $_SESSION['usuario_nombre'] ?? 'Invitado';
 $emailUsuario = $_SESSION['usuario_email'] ?? 'usuario@sena.edu.co';
 $rolUsuario = $_SESSION['usuario_rol'] ?? 'aprendiz';
@@ -35,7 +34,6 @@ $iniciales = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_nomb
             <div class="nav-left">
                 <button onclick="window.location.href='<?= htmlspecialchars(app_url('index.php')) ?>'" class="nav-item menu-toggle-btn">Inicio</button>
 
-                <!-- MENÚ -->
                 <div class="menu-container">
                     <button id="menu-btn" class="profile-btn">
                         <div class="profile-avatar"><i class="fas fa-bars"></i></div>
@@ -48,14 +46,31 @@ $iniciales = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_nomb
                             <div class="profile-menu-email">Sistema DTD</div>
                         </div>
                         
+                        <?php if (esAprendiz()): ?>
+                        <a href="<?= htmlspecialchars(app_url('mod/aprendiz_perfil.php')) ?>" class="profile-menu-item">
+                            <i class="fas fa-user-circle"></i> Mi Perfil
+                        </a>
+                        <a href="<?= htmlspecialchars(app_url('mod/aprendiz_estadisticas.php')) ?>" class="profile-menu-item">
+                            <i class="fas fa-chart-line"></i> Mis Estadísticas
+                        </a>
+                        <a href="<?= htmlspecialchars(app_url('mod/aprendiz_faltas.php')) ?>" class="profile-menu-item">
+                            <i class="fas fa-calendar-times"></i> Justificar Faltas
+                        </a>
+                        <a href="<?= htmlspecialchars(app_url('mod/aprendiz_calendario.php')) ?>" class="profile-menu-item">
+                            <i class="fas fa-calendar-alt"></i> Calendario
+                        </a>
+                        <?php endif; ?>
+
+                        <?php if (esAdmin() || esInstructor()): ?>
                         <a href="<?= htmlspecialchars(app_url('mod/aprendices.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-user-graduate"></i> Aprendices
                         </a>
                         <a href="<?= htmlspecialchars(app_url('mod/instructores.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-chalkboard-teacher"></i> Instructores
                         </a>
+                        <?php endif; ?>
                         
-                        <?php if (esAdmin()): // Solo admin ve regionales, programas y fichas ?>
+                        <?php if (esAdmin()): ?>
                         <a href="<?= htmlspecialchars(app_url('mod/regionales.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-map-marked-alt"></i> Regionales
                         </a>
@@ -67,6 +82,7 @@ $iniciales = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_nomb
                         </a>
                         <?php endif; ?>
                         
+                        <?php if (esAdmin() || esInstructor()): ?>
                         <a href="<?= htmlspecialchars(app_url('mod/alertas.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-bell"></i> Alertas
                             <?php if($totalAlertas > 0): ?>
@@ -79,6 +95,7 @@ $iniciales = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_nomb
                         <a href="<?= htmlspecialchars(app_url('mod/evidencias.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-file-alt"></i> Evidencias
                         </a>
+                        <?php endif; ?>
                         
                         <div class="profile-menu-footer">
                             <span>© 2026 DTD</span>
@@ -90,7 +107,6 @@ $iniciales = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_nomb
             <div class="nav-right">
                 <button id="theme-toggle" class="nav-item"><i id="theme-icon" class="fas fa-moon"></i></button>
                 
-                <!-- PERFIL -->
                 <div class="profile-container">
                     <button id="profile-btn" class="profile-btn">
                         <div class="profile-avatar"><?= htmlspecialchars($iniciales) ?></div>
