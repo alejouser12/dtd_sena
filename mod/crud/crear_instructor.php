@@ -1,232 +1,298 @@
 <?php
+// mod/crud/crear_instructor.php
 session_start();
 require_once __DIR__ . '/../../config/auth.php';
-if (!esAdmin()) { header('Location: ../instructores.php'); exit; }
-require_once __DIR__ . '/../../conexion/RegionalDAO.php';
-require_once __DIR__ . '/../../conexion/CentroDAO.php';
+require_once __DIR__ . '/../../config/app.php';
+require_once __DIR__ . '/../../conexion/conexion.php';
+if (!esAdmin()) redirect_to('login.php');
 
-$regionalDAO = new RegionalDAO();
-$centroDAO = new CentroDAO();
+class CrearInstructorDB extends BaseDatos {
+    protected function consultar(){}protected function insertar(){}
+    protected function actualizar(){}protected function eliminar(){}
+    public function varios($sql,$p=[]){ $s=$this->ejecutarPreparado($sql,$p); return $s?$s->fetchAll(PDO::FETCH_ASSOC):[]; }
+    public function exec($sql,$p=[]){ return $this->ejecutarPreparado($sql,$p); }
+    public function lastId(){ $s=$this->ejecutarPreparado("SELECT LAST_INSERT_ID() AS id",[]); $r=$s?$s->fetch(PDO::FETCH_ASSOC):null; return $r?(int)$r['id']:0; }
+}
+$db = new CrearInstructorDB();
 
-$regionales = $regionalDAO->obtenerTodas(); // todas las regionales activas
+$regionales = $db->varios("SELECT REGIONAL_ID, NOMBRE FROM regional WHERE ESTADO='Activa' ORDER BY NOMBRE");
+$centros    = $db->varios("SELECT CENTRO_ID, NOMBRE, REGIONAL_ID FROM centro ORDER BY NOMBRE");
+$fichas     = $db->varios(
+    "SELECT f.FICHA_ID, f.CODIGO_FICHA, f.CENTRO_ID, p.NOMBRE AS programa
+     FROM ficha f LEFT JOIN programa p ON f.PROGRAMA_ID=p.PROGRAMA_ID
+     WHERE f.ESTADO='Activa' ORDER BY f.CODIGO_FICHA"
+);
+
+$msg=''; $msgType='success';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $nombres      = trim($_POST['nombres']      ?? '');
+    $apellidos    = trim($_POST['apellidos']    ?? '');
+    $email        = trim($_POST['email']        ?? '');
+    $espec        = trim($_POST['especialidad'] ?? '');
+    $fichasSel    = (array)($_POST['fichas']    ?? []);
+    $gestorFicha  = (int)($_POST['gestor_ficha_id'] ?? 0);
+    $userEmail    = trim($_POST['user_email']   ?? $email);
+    $userPass     = trim($_POST['user_pass']    ?? '');
+
+    if (!$nombres || !$apellidos || !$email) {
+        $msg='✗ Completa los campos obligatorios.'; $msgType='error';
+    } elseif (strlen($userPass) < 6) {
+        $msg='✗ La contraseña debe tener al menos 6 caracteres.'; $msgType='error';
+    } else {
+        // Validar que ficha gestor esté entre las fichas seleccionadas
+        if ($gestorFicha && !in_array((string)$gestorFicha, $fichasSel)) {
+            $gestorFicha = 0;
+        }
+
+        $db->exec(
+            "INSERT INTO instructor (NOMBRES,APELLIDOS,EMAIL,ESPECIALIDAD,GESTOR_FICHA_ID)
+             VALUES (:n,:a,:e,:es,:gf)",
+            [':n'=>$nombres,':a'=>$apellidos,':e'=>$email,':es'=>$espec,
+             ':gf'=>($gestorFicha ?: null)]
+        );
+        $instructorId = $db->lastId();
+
+        if ($instructorId) {
+            foreach ($fichasSel as $fid) {
+                $fid=(int)$fid;
+                if ($fid) $db->exec(
+                    "INSERT IGNORE INTO instructor_ficha (INSTRUCTOR_ID,FICHA_ID) VALUES (:i,:f)",
+                    [':i'=>$instructorId,':f'=>$fid]
+                );
+            }
+            $passHash = password_hash($userPass, PASSWORD_BCRYPT);
+            $db->exec(
+                "INSERT INTO usuarios (email,password,nombre,rol,referencia_id)
+                 VALUES (:em,:pw,:nom,'instructor',:rid)
+                 ON DUPLICATE KEY UPDATE referencia_id=:rid2,password=:pw2",
+                [':em'=>$userEmail,':pw'=>$passHash,':nom'=>"$nombres $apellidos",
+                 ':rid'=>$instructorId,':rid2'=>$instructorId,':pw2'=>$passHash]
+            );
+            $tipo = $gestorFicha ? "(Gestor de ficha $gestorFicha)" : "(Instructor regular)";
+            $msg  = "✓ Instructor creado $tipo. Usuario: $userEmail — ".count($fichasSel)." ficha(s) asignada(s)";
+        } else {
+            $msg='✗ Error al crear el instructor.'; $msgType='error';
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nuevo Instructor - DTD SENA</title>
-    <link rel="stylesheet" href="../../css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <style>
-        .form-container { max-width: 800px; margin: 0 auto; }
-        .form-header {
-            background: linear-gradient(135deg, var(--color-verde-1), var(--color-verde-2));
-            padding: 25px;
-            border-radius: 20px 20px 0 0;
-            color: white;
-            text-align: center;
-        }
-        .form-header i { font-size: 50px; margin-bottom: 10px; }
-        .form-header h2 { margin: 0; font-size: 28px; }
-        .form-header p { margin: 5px 0 0; opacity: 0.9; }
-        .card-body { padding: 30px; }
-        .form-actions { display: flex; gap: 15px; justify-content: flex-end; margin-top: 30px; }
-        .select-fichas {
-            min-height: 120px;
-            padding: 10px;
-            border: 2px solid var(--border-color);
-            border-radius: var(--border-radius-input);
-            background: var(--color-blanco);
-            color: var(--color-texto);
-        }
-        @media (max-width: 768px) {
-            .form-actions { flex-direction: column; }
-            .form-actions .btn-cancel, .form-actions .btn-action { width: 100%; justify-content: center; }
-        }
-    </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Crear Instructor — DTD SENA</title>
+<link rel="stylesheet" href="<?= htmlspecialchars(asset_url('css/style.css')) ?>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+.form-card{background:var(--color-blanco);border:1px solid var(--border-color);border-radius:18px;padding:28px;box-shadow:var(--shadow-card);margin-bottom:22px;}
+.s-title{font-size:13px;font-weight:800;color:var(--color-verde-1);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid rgba(57,169,0,.15);display:flex;align-items:center;gap:8px;}
+.f-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;letter-spacing:.4px;}
+.fg input,.fg select{padding:9px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;background:var(--color-blanco);color:var(--color-texto);width:100%;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--color-verde-1);box-shadow:0 0 0 3px rgba(57,169,0,.08);}
+.cascade-box{padding:16px;background:rgba(57,169,0,.04);border-radius:12px;border:1px solid rgba(57,169,0,.15);margin-bottom:14px;}
+.fichas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:220px;overflow-y:auto;padding:4px;}
+.ficha-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-color);border-radius:8px;font-size:12px;cursor:pointer;transition:.15s;}
+.ficha-item:hover{border-color:var(--color-verde-1);background:rgba(57,169,0,.04);}
+.ficha-item input[type=checkbox]{accent-color:var(--color-verde-1);width:15px;height:15px;flex-shrink:0;}
+.gestor-box{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;margin-top:14px;display:none;}
+.gestor-box label{font-size:12px;font-weight:700;color:#92400e;display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+.msg-ok{background:rgba(57,169,0,.1);border:1px solid rgba(57,169,0,.3);color:#1a5c00;padding:12px 16px;border-radius:8px;margin-bottom:18px;font-weight:600;font-size:13px;}
+.msg-err{background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);color:#991b1b;padding:12px 16px;border-radius:8px;margin-bottom:18px;font-weight:600;font-size:13px;}
+.pw-wrap{position:relative;}
+.pw-wrap input{padding-right:38px;}
+.pw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--color-texto-secundario);font-size:14px;background:none;border:none;}
+select:disabled{opacity:.45;}
+#fichas-panel{display:none;}
+</style>
 </head>
 <body>
-    <div id="loader"><img src="../../img/logo_sena_verde.png" alt="Logo SENA" id="loader-logo"></div>
-    <?php include __DIR__ . '/../../config/header.php'; ?>
-    <main class="container" id="contenido-principal" style="display:none; opacity:0;">
-        <div class="form-container">
-            <div class="form-header">
-                <i class="fas fa-chalkboard-teacher"></i>
-                <h2>Nuevo Instructor</h2>
-                <p>Registre un nuevo instructor y asígnele regional, centro y fichas</p>
+<div id="loader"><img src="<?= htmlspecialchars(asset_url('img/logo_sena_verde.png')) ?>" alt="" id="loader-logo"></div>
+<?php include __DIR__ . '/../../config/header.php'; ?>
+<main class="container" id="contenido-principal" style="display:none;opacity:0;">
+
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+    <a href="<?= htmlspecialchars(app_url('mod/instructores.php')) ?>" class="btn-view-all"><i class="fas fa-arrow-left"></i> Instructores</a>
+    <span style="font-size:13px;color:var(--color-texto-secundario);"><i class="fas fa-chalkboard-teacher"></i> Nuevo Instructor</span>
+</div>
+
+<?php if ($msg): ?>
+<div class="<?= $msgType==='success'?'msg-ok':'msg-err' ?>"><?= htmlspecialchars($msg) ?></div>
+<?php endif; ?>
+
+<form method="POST">
+
+<!-- Datos -->
+<div class="form-card">
+    <div class="s-title"><i class="fas fa-user-tie"></i> Datos del Instructor</div>
+    <div class="f-row">
+        <div class="fg"><label>Nombres *</label><input type="text" name="nombres" required placeholder="Nombres completos"></div>
+        <div class="fg"><label>Apellidos *</label><input type="text" name="apellidos" required placeholder="Apellidos completos"></div>
+        <div class="fg"><label>Correo institucional *</label><input type="email" name="email" id="email_i" required placeholder="nombre@sena.edu.co" oninput="syncEmail()"></div>
+        <div class="fg"><label>Especialidad</label><input type="text" name="especialidad" placeholder="Ej: Desarrollo de Software"></div>
+    </div>
+</div>
+
+<!-- Fichas -->
+<div class="form-card">
+    <div class="s-title"><i class="fas fa-layer-group"></i> Asignar Fichas y Gestoría</div>
+    <div class="cascade-box">
+        <div class="f-row" style="margin-bottom:0;">
+            <div class="fg">
+                <label>Regional</label>
+                <select id="sel_regional" onchange="filtrarCentros()">
+                    <option value="">— Selecciona —</option>
+                    <?php foreach ($regionales as $r): ?>
+                    <option value="<?= $r['REGIONAL_ID'] ?>"><?= htmlspecialchars($r['NOMBRE']) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
-            <div class="content-card" style="border-radius: 0 0 20px 20px; margin-top: 0;">
-                <div class="card-body">
-                    <form id="form-instructor">
-                        <!-- Datos personales -->
-                        <div class="form-group">
-                            <label><i class="fas fa-user"></i> Nombres *</label>
-                            <input type="text" name="nombres" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-user"></i> Apellidos *</label>
-                            <input type="text" name="apellidos" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-envelope"></i> Email *</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-code"></i> Especialidad</label>
-                            <input type="text" name="especialidad" class="form-control" placeholder="Ej: Desarrollo de Software">
-                        </div>
-
-                        <!-- Ubicación Regional -->
-                        <div class="form-group">
-                            <label><i class="fas fa-globe-americas"></i> Regional *</label>
-                            <select name="regional_id" id="regional_id" class="form-control" required>
-                                <option value="">-- Seleccione una regional --</option>
-                                <?php foreach ($regionales as $reg): ?>
-                                    <option value="<?= $reg['REGIONAL_ID'] ?>"><?= htmlspecialchars($reg['NOMBRE']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <!-- Centro (dependiente de regional) -->
-                        <div class="form-group">
-                            <label><i class="fas fa-building"></i> Centro *</label>
-                            <select name="centro_id" id="centro_id" class="form-control" required disabled>
-                                <option value="">-- Primero seleccione una regional --</option>
-                            </select>
-                        </div>
-
-                        <!-- Fichas (dependientes del centro) -->
-                        <div class="form-group">
-                            <label><i class="fas fa-layer-group"></i> Fichas asignadas (puede seleccionar varias)</label>
-                            <select name="fichas_ids[]" id="fichas_ids" class="select-fichas" multiple disabled>
-                                <option value="">-- Primero seleccione un centro --</option>
-                            </select>
-                            <small class="form-text text-muted">Mantenga presionada la tecla Ctrl (Cmd en Mac) para seleccionar múltiples fichas.</small>
-                        </div>
-
-                        <div class="form-actions">
-                            <a href="../instructores.php" class="btn-cancel"><i class="fas fa-times"></i> Cancelar</a>
-                            <button type="submit" class="btn-action"><i class="fas fa-save"></i> Guardar Instructor</button>
-                        </div>
-                    </form>
-                </div>
+            <div class="fg">
+                <label>Centro</label>
+                <select id="sel_centro" onchange="filtrarFichas()" disabled>
+                    <option value="">— Elige regional —</option>
+                </select>
             </div>
         </div>
-    </main>
-    <?php include __DIR__ . '/../../config/footer.php'; ?>
-    <script src="../../js/tema.js"></script>
-    <script src="../../js/loader.js"></script>
-    <script src="../../js/panel_menu.js"></script>
-    <script src="../../js/dropdowns.js"></script>
-    <script src="../../js/profile_menu.js"></script>
-    <script src="../../js/sweetalerts.js"></script>
-    <script src="../../js/menu.js"></script>
-    <script>
-        // Cargar centros según regional seleccionada
-        document.getElementById('regional_id').addEventListener('change', function() {
-            const regionalId = this.value;
-            const centroSelect = document.getElementById('centro_id');
-            const fichasSelect = document.getElementById('fichas_ids');
+    </div>
 
-            if (!regionalId) {
-                centroSelect.innerHTML = '<option value="">-- Primero seleccione una regional --</option>';
-                centroSelect.disabled = true;
-                fichasSelect.innerHTML = '<option value="">-- Primero seleccione un centro --</option>';
-                fichasSelect.disabled = true;
-                return;
-            }
+    <div id="fichas-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <label style="font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;">Fichas en las que dicta clase</label>
+            <span id="sel-count" style="font-size:11px;color:var(--color-verde-1);font-weight:700;">0 seleccionadas</span>
+        </div>
+        <div class="fichas-grid" id="fichas-grid"></div>
 
-            centroSelect.disabled = true;
-            centroSelect.innerHTML = '<option value="">Cargando centros...</option>';
+        <!-- Gestor de una sola ficha -->
+        <div class="gestor-box" id="gestor-box">
+            <label><i class="fas fa-crown" style="color:#f59e0b;"></i> ¿De cuál ficha es Gestor de Grupo?</label>
+            <select name="gestor_ficha_id" id="gestor_ficha_sel"
+                    style="padding:9px 12px;border:1px solid rgba(245,158,11,.4);border-radius:8px;font-size:13px;background:var(--color-blanco);width:100%;color:var(--color-texto);">
+                <option value="0">— No es gestor de ninguna —</option>
+            </select>
+            <p style="font-size:11px;color:#92400e;margin-top:6px;">
+                <i class="fas fa-info-circle"></i>
+                El gestor puede crear y editar el horario de esa ficha. Solo puede ser gestor de <strong>una</strong>.
+            </p>
+        </div>
+    </div>
+</div>
 
-            fetch(`../ajax/centros_por_regional.php?regional_id=${regionalId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        centroSelect.innerHTML = '<option value="">Error al cargar centros</option>';
-                        centroSelect.disabled = true;
-                        return;
-                    }
-                    if (data.length === 0) {
-                        centroSelect.innerHTML = '<option value="">No hay centros en esta regional</option>';
-                        centroSelect.disabled = true;
-                    } else {
-                        let options = '<option value="">-- Seleccione un centro --</option>';
-                        data.forEach(centro => {
-                            options += `<option value="${centro.CENTRO_ID}">${centro.NOMBRE}</option>`;
-                        });
-                        centroSelect.innerHTML = options;
-                        centroSelect.disabled = false;
-                    }
-                    // Reset fichas
-                    fichasSelect.innerHTML = '<option value="">-- Primero seleccione un centro --</option>';
-                    fichasSelect.disabled = true;
-                })
-                .catch(() => {
-                    centroSelect.innerHTML = '<option value="">Error de red</option>';
-                    centroSelect.disabled = true;
-                });
-        });
+<!-- Credenciales -->
+<div class="form-card">
+    <div class="s-title"><i class="fas fa-key"></i> Credenciales de Acceso</div>
+    <div class="f-row">
+        <div class="fg">
+            <label>Correo de usuario *</label>
+            <input type="email" name="user_email" id="user_email" required placeholder="correo para iniciar sesión">
+        </div>
+        <div class="fg">
+            <label>Contraseña *</label>
+            <div class="pw-wrap">
+                <input type="password" name="user_pass" id="p1" required minlength="6" placeholder="Mínimo 6 caracteres">
+                <button type="button" class="pw-eye" onclick="eye('p1',this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
+        <div class="fg">
+            <label>Confirmar contraseña *</label>
+            <div class="pw-wrap">
+                <input type="password" id="p2" required minlength="6" placeholder="Repite la contraseña">
+                <button type="button" class="pw-eye" onclick="eye('p2',this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
 
-        // Cargar fichas según centro seleccionado
-        document.getElementById('centro_id').addEventListener('change', function() {
-            const centroId = this.value;
-            const fichasSelect = document.getElementById('fichas_ids');
+<div style="display:flex;gap:10px;">
+    <button type="submit" class="btn-action" onclick="return check()"><i class="fas fa-save"></i> Crear Instructor</button>
+    <a href="<?= htmlspecialchars(app_url('mod/instructores.php')) ?>" class="btn-cancel">Cancelar</a>
+</div>
+</form>
+</main>
 
-            if (!centroId) {
-                fichasSelect.innerHTML = '<option value="">-- Primero seleccione un centro --</option>';
-                fichasSelect.disabled = true;
-                return;
-            }
+<?php include __DIR__ . '/../../config/footer.php'; ?>
+<script src="<?= htmlspecialchars(asset_url('js/tema.js')) ?>"></script>
+<script src="<?= htmlspecialchars(asset_url('js/loader.js')) ?>"></script>
+<script src="<?= htmlspecialchars(asset_url('js/panel_menu.js')) ?>"></script>
+<script src="<?= htmlspecialchars(asset_url('js/dropdowns.js')) ?>"></script>
+<script src="<?= htmlspecialchars(asset_url('js/profile_menu.js')) ?>"></script>
+<script src="<?= htmlspecialchars(asset_url('js/menu.js')) ?>"></script>
+<script>
+const CENTROS = <?= json_encode($centros) ?>;
+const FICHAS  = <?= json_encode($fichas) ?>;
 
-            fichasSelect.disabled = true;
-            fichasSelect.innerHTML = '<option value="">Cargando fichas...</option>';
+function filtrarCentros() {
+    const rid = parseInt(document.getElementById('sel_regional').value);
+    const s   = document.getElementById('sel_centro');
+    s.innerHTML = '<option value="">— Selecciona centro —</option>';
+    s.disabled  = true;
+    document.getElementById('fichas-panel').style.display = 'none';
+    if (!rid) return;
+    CENTROS.filter(c => parseInt(c.REGIONAL_ID)===rid)
+           .forEach(c => s.innerHTML += `<option value="${c.CENTRO_ID}">${c.NOMBRE}</option>`);
+    s.disabled = false;
+}
 
-            fetch(`../ajax/fichas_por_centro.php?centro_id=${centroId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        fichasSelect.innerHTML = '<option value="">Error al cargar fichas</option>';
-                        fichasSelect.disabled = true;
-                        return;
-                    }
-                    if (data.length === 0) {
-                        fichasSelect.innerHTML = '<option value="">No hay fichas en este centro</option>';
-                        fichasSelect.disabled = true;
-                    } else {
-                        let options = '';
-                        data.forEach(ficha => {
-                            options += `<option value="${ficha.FICHA_ID}">${ficha.CODIGO_FICHA} - ${ficha.programa_nombre || ''}</option>`;
-                        });
-                        fichasSelect.innerHTML = options;
-                        fichasSelect.disabled = false;
-                    }
-                })
-                .catch(() => {
-                    fichasSelect.innerHTML = '<option value="">Error de red</option>';
-                    fichasSelect.disabled = true;
-                });
-        });
+function filtrarFichas() {
+    const cid   = parseInt(document.getElementById('sel_centro').value);
+    const panel = document.getElementById('fichas-panel');
+    const grid  = document.getElementById('fichas-grid');
+    if (!cid) { panel.style.display='none'; return; }
+    const lista = FICHAS.filter(f => parseInt(f.CENTRO_ID)===cid);
+    panel.style.display = 'block';
+    document.getElementById('gestor-box').style.display = 'none';
+    if (!lista.length) {
+        grid.innerHTML='<p style="color:var(--color-texto-secundario);font-size:12px;padding:10px;">Sin fichas activas en este centro.</p>';
+        return;
+    }
+    grid.innerHTML = lista.map(f => `
+        <label class="ficha-item">
+            <input type="checkbox" name="fichas[]" value="${f.FICHA_ID}" onchange="actualizarGestor()">
+            <div>
+                <strong>${f.CODIGO_FICHA}</strong>
+                <div style="font-size:10px;opacity:.7;">${f.programa||''}</div>
+            </div>
+        </label>`).join('');
+}
 
-        // Envío del formulario
-        document.getElementById('form-instructor').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            fetch('guardar_instructor.php', { method: 'POST', body: formData })
-                .then(r => r.json())
-                .then(d => {
-                    if (d.success) {
-                        Swal.fire({ icon: 'success', title: 'Instructor creado', timer: 1500, showConfirmButton: false })
-                            .then(() => location.href = '../instructor_detalle.php?id=' + d.id);
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: d.message || 'No se pudo guardar' });
-                    }
-                })
-                .catch(() => Swal.fire({ icon: 'error', title: 'Error de red', text: 'No se pudo conectar con el servidor' }));
-        });
-        if (typeof initThemeToggle === 'function') setTimeout(initThemeToggle, 100);
-    </script>
+function actualizarGestor() {
+    const checks = [...document.querySelectorAll('input[name="fichas[]"]:checked')];
+    const n = checks.length;
+    document.getElementById('sel-count').textContent = n + ' seleccionada' + (n!==1?'s':'');
+
+    const gBox = document.getElementById('gestor-box');
+    const gSel = document.getElementById('gestor_ficha_sel');
+
+    if (!n) { gBox.style.display='none'; return; }
+
+    // Reconstruir select del gestor con las fichas seleccionadas
+    gSel.innerHTML = '<option value="0">— No es gestor de ninguna —</option>';
+    checks.forEach(cb => {
+        // Buscar nombre de la ficha
+        const ficha = FICHAS.find(f => f.FICHA_ID == cb.value);
+        if (ficha) {
+            gSel.innerHTML += `<option value="${ficha.FICHA_ID}">${ficha.CODIGO_FICHA} — ${ficha.programa||''}</option>`;
+        }
+    });
+    gBox.style.display = 'block';
+}
+
+function syncEmail() {
+    document.getElementById('user_email').value = document.getElementById('email_i').value;
+}
+function eye(id, btn) {
+    const i=document.getElementById(id);
+    i.type=i.type==='password'?'text':'password';
+    btn.innerHTML=i.type==='password'?'<i class="fas fa-eye"></i>':'<i class="fas fa-eye-slash"></i>';
+}
+function check() {
+    if (document.getElementById('p1').value !== document.getElementById('p2').value) {
+        alert('Las contraseñas no coinciden.'); return false;
+    }
+    return true;
+}
+</script>
 </body>
 </html>

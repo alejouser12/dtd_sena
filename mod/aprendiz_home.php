@@ -1,19 +1,20 @@
 <?php
-// mod/aprendiz/index.php
+// mod/aprendiz_home.php — Dashboard principal del aprendiz
 session_start();
-require_once __DIR__ . '/../../config/auth.php';
-require_once __DIR__ . '/../../config/app.php';
+require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/app.php';
 
 if (!esAprendiz()) {
     redirect_to('login.php');
 }
 
-require_once __DIR__ . '/../../conexion/AprendizDAO.php';
-require_once __DIR__ . '/../../conexion/AsistenciaDAO.php';
+require_once __DIR__ . '/../conexion/AprendizDAO.php';
+require_once __DIR__ . '/../conexion/AsistenciaDAO.php';
 
 $aprendizDAO   = new AprendizDAO();
 $asistenciaDAO = new AsistenciaDAO();
 
+// Buscar aprendiz por usuario_ref_id o por usuario_id
 $aprendizId = (int)($_SESSION['usuario_ref_id'] ?? 0);
 $aprendiz   = $aprendizId ? $aprendizDAO->obtenerPorId($aprendizId) : null;
 
@@ -61,7 +62,7 @@ $nombre = $aprendiz
 </head>
 <body>
 <div id="loader"><img src="<?= htmlspecialchars(asset_url('img/logo_sena_verde.png')) ?>" alt="" id="loader-logo"></div>
-<?php include __DIR__ . '/../../config/header.php'; ?>
+<?php include __DIR__ . '/../config/header.php'; ?>
 
 <main class="container" id="contenido-principal" style="display:none;opacity:0;">
 
@@ -79,7 +80,7 @@ $nombre = $aprendiz
             <span class="badge"><i class="fas fa-check-circle" style="color:#4ade80;"></i> <?= htmlspecialchars($aprendiz['ESTADO_ACADEMICO'] ?? 'Activo') ?></span>
         </div>
         <?php else: ?>
-        <p style="opacity:.7;margin-top:8px;"><i class="fas fa-info-circle"></i> Cuenta activa — contacta al administrador para vincular tu ficha.</p>
+        <p style="opacity:.7;">Cuenta vinculada — contacta al administrador para asociar tu ficha.</p>
         <?php endif; ?>
     </div>
 
@@ -154,7 +155,7 @@ $nombre = $aprendiz
 
 </main>
 
-<?php include __DIR__ . '/../../config/footer.php'; ?>
+<?php include __DIR__ . '/../config/footer.php'; ?>
 <script src="<?= htmlspecialchars(asset_url('js/tema.js')) ?>"></script>
 <script src="<?= htmlspecialchars(asset_url('js/loader.js')) ?>"></script>
 <script src="<?= htmlspecialchars(asset_url('js/panel_menu.js')) ?>"></script>

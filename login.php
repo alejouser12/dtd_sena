@@ -11,7 +11,6 @@ require_once __DIR__ . '/conexion/conexion.php';
 
 class LoginDAO extends BaseDatos
 {
-    // Implementar métodos abstractos
     protected function consultar() {}
     protected function insertar() {}
     protected function actualizar() {}
@@ -35,26 +34,39 @@ $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $loginDAO = new LoginDAO();
-    
-    $email = $_POST['email'] ?? '';
-    $password = $_POST['password'] ?? '';
+
+    $email    = trim($_POST['email']    ?? '');
+    $password = trim($_POST['password'] ?? '');
 
     if (empty($email) || empty($password)) {
         $error = 'Todos los campos son obligatorios.';
     } else {
         $usuario = $loginDAO->verificarCredenciales($email, $password);
-        
+
         if ($usuario) {
-            $_SESSION['usuario_id'] = $usuario['usuario_id'];
-            $_SESSION['usuario_email'] = $usuario['email'];
-            $_SESSION['usuario_rol'] = $usuario['rol'];
+            // Limpiar sesión anterior y regenerar ID
+            session_regenerate_id(true);
+
+            $_SESSION['usuario_id']     = $usuario['usuario_id'];
+            $_SESSION['usuario_email']  = $usuario['email'];
+            $_SESSION['usuario_rol']    = $usuario['rol'];
             $_SESSION['usuario_ref_id'] = $usuario['referencia_id'];
             $_SESSION['usuario_nombre'] = $usuario['nombre'] ?? $usuario['email'];
 
-            header('Location: index.php');
-            exit;
+            // ── Redirigir según rol ──────────────────────────────
+            $rol = $usuario['rol'];
+            if ($rol === 'aprendiz') {
+                header('Location: mod/aprendiz_home.php');
+                exit;
+            } elseif ($rol === 'instructor') {
+                header('Location: mod/instructor_dashboard.php');
+                exit;
+            } else {
+                header('Location: index.php');
+                exit;
+            }
         } else {
-            $error = 'Credenciales incorrectas.';
+            $error = 'Credenciales incorrectas. Verifica tu correo y contraseña.';
         }
     }
 }
@@ -69,6 +81,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+/* FUERZA BRUTA - SOBRESCRIBE TODO */
+.login-wrapper {
+    max-width: 400px !important;
+    width: 90% !important;
+    margin: 20px auto !important;
+    padding: 25px 28px 28px !important;
+    border-radius: 24px !important;
+}
+
+@media (max-width: 600px) {
+    .login-wrapper {
+        max-width: 340px !important;
+        padding: 20px 22px 24px !important;
+    }
+}
+</style>
 </head>
 <body class="login-page">
 
@@ -89,10 +118,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
     <?php if ($error): ?>
     <script>
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: '<?= addslashes($error) ?>'
+        document.addEventListener('DOMContentLoaded', function() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de acceso',
+                text: '<?= addslashes($error) ?>',
+                confirmButtonColor: '#39a900'
+            });
         });
     </script>
     <?php endif; ?>
@@ -112,10 +144,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <label for="login-email">Correo electrónico *</label>
             <div class="input-with-icon">
                 <i class="fa-solid fa-envelope input-icon"></i>
-                <input type="email" 
-                       name="email" 
+                <input type="email"
+                       name="email"
                        id="login-email"
-                       placeholder="usuario@example.com" 
+                       placeholder="usuario@example.com"
                        value="<?= isset($_POST['email']) ? htmlspecialchars($_POST['email']) : '' ?>"
                        autocomplete="email"
                        required />
@@ -126,10 +158,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <label for="login-password">Contraseña *</label>
             <div class="password-container">
                 <i class="fa-solid fa-lock input-icon"></i>
-                <input type="password" 
-                       name="password" 
+                <input type="password"
+                       name="password"
                        id="login-password"
-                       placeholder="Contraseña" 
+                       placeholder="Contraseña"
                        autocomplete="current-password"
                        required />
                 <i class="fa-solid fa-eye toggle-password"></i>
@@ -153,60 +185,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 <label for="signup-firstname">Nombre *</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-user input-icon"></i>
-                    <input type="text" 
-                           name="firstName" 
-                           id="signup-firstname"
-                           placeholder="Tu nombre"
-                           autocomplete="given-name"
-                           required />
+                    <input type="text" name="firstName" id="signup-firstname"
+                           placeholder="Tu nombre" autocomplete="given-name" required />
                 </div>
             </div>
             <div class="form-field">
                 <label for="signup-lastname">Apellido *</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-user input-icon"></i>
-                    <input type="text" 
-                           name="lastName" 
-                           id="signup-lastname"
-                           placeholder="Tu apellido"
-                           autocomplete="family-name"
-                           required />
+                    <input type="text" name="lastName" id="signup-lastname"
+                           placeholder="Tu apellido" autocomplete="family-name" required />
                 </div>
             </div>
             <div class="form-field">
                 <label for="signup-email">Correo electrónico *</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-envelope input-icon"></i>
-                    <input type="email" 
-                           name="email" 
-                           id="signup-email"
-                           placeholder="tu@email.com"
-                           autocomplete="email"
-                           required />
+                    <input type="email" name="email" id="signup-email"
+                           placeholder="tu@email.com" autocomplete="email" required />
                 </div>
             </div>
             <div class="form-field">
                 <label for="signup-username">Usuario *</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-at input-icon"></i>
-                    <input type="text" 
-                           name="username" 
-                           id="signup-username"
-                           placeholder="Nombre de usuario"
-                           autocomplete="username"
-                           required />
+                    <input type="text" name="username" id="signup-username"
+                           placeholder="Nombre de usuario" autocomplete="username" required />
                 </div>
             </div>
             <div class="form-field">
                 <label for="signup-password">Contraseña *</label>
                 <div class="password-container">
                     <i class="fa-solid fa-lock input-icon"></i>
-                    <input type="password" 
-                           name="signupPassword" 
-                           id="signup-password"
-                           placeholder="Crea una contraseña"
-                           autocomplete="new-password"
-                           required />
+                    <input type="password" name="signupPassword" id="signup-password"
+                           placeholder="Crea una contraseña" autocomplete="new-password" required />
                     <i class="fa-solid fa-eye toggle-password"></i>
                 </div>
             </div>
@@ -220,8 +232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         © 2026 DTD_SENA. Todos los derechos reservados.
     </div>
 </div>
-
-    </div>
+</div>
 
 <script src="js/login.js"></script>
 <script src="js/tema.js"></script>
