@@ -12,19 +12,11 @@ if (!esAprendiz()) {
 
 $aprendizDAO = new AprendizDAO();
 $horarioDAO  = new HorarioDAO();
+$aprendizId  = (int)($_SESSION['usuario_ref_id'] ?? 0);
 $usuarioId   = (int)($_SESSION['usuario_id'] ?? 0);
+$usuarioEmail = $_SESSION['usuario_email'] ?? '';
 
-$stmt = $aprendizDAO->ejecutarPreparado(
-    "SELECT a.APRENDIZ_ID, a.NOMBRES, a.APELLIDOS, a.FICHA_ID,
-            f.CODIGO_FICHA, p.NOMBRE AS programa_nombre
-     FROM aprendiz a
-     LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
-     LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
-     WHERE a.usuario_id = :uid LIMIT 1",
-    [':uid' => $usuarioId]
-);
-$aprendiz = $stmt ? $stmt->fetch() : null;
-
+$aprendiz = $aprendizDAO->obtenerPorSesion($aprendizId, $usuarioId, $usuarioEmail);
 if (!$aprendiz || !$aprendiz['FICHA_ID']) {
     redirect_to('aprendiz_perfil.php');
 }

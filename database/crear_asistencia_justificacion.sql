@@ -1,0 +1,20 @@
+-- Establece la tabla de justificaciones para faltas de asistencia
+CREATE TABLE IF NOT EXISTS asistencia_justificacion (
+    JUSTIFICACION_ID int(11) NOT NULL AUTO_INCREMENT,
+    ASISTENCIA_ID int(11) NOT NULL,
+    APRENDIZ_ID int(11) NOT NULL,
+    FECHA_PRESENTACION datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    TEXTO text,
+    ARCHIVO varchar(255) DEFAULT NULL,
+    ESTADO enum('pendiente','aprobada','rechazada') NOT NULL DEFAULT 'pendiente',
+    INSTRUCTOR_ID int(11) DEFAULT NULL,
+    COMENTARIO_INSTRUCTOR text DEFAULT NULL,
+    FECHA_RESPUESTA datetime DEFAULT NULL,
+    PRIMARY KEY (JUSTIFICACION_ID),
+    KEY idx_asistencia_id (ASISTENCIA_ID),
+    KEY idx_aprendiz_id (APRENDIZ_ID),
+    KEY idx_instructor_id (INSTRUCTOR_ID),
+    CONSTRAINT fk_justificacion_asistencia FOREIGN KEY (ASISTENCIA_ID) REFERENCES asistencia (ASISTENCIA_ID) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_justificacion_aprendiz FOREIGN KEY (APRENDIZ_ID) REFERENCES aprendiz (APRENDIZ_ID) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_justificacion_instructor FOREIGN KEY (INSTRUCTOR_ID) REFERENCES instructor (INSTRUCTOR_ID) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

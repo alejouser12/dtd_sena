@@ -2,11 +2,38 @@
 session_start();
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../conexion/FichaDAO.php';
+require_once __DIR__ . '/../conexion/instructorDAO.php';
 
 $dao = new FichaDAO();
-$fichas = $dao->obtenerTodas();
+$instructor_id = isset($_GET['instructor_id']) ? (int)$_GET['instructor_id'] : 0;
 
-// Calcular totales para estadísticas
+if (esInstructor()) {
+    if ($instructor_id <= 0) {
+        $instructor_id = (int)($_SESSION['usuario_ref_id'] ?? 0);
+    }
+    if ($instructor_id <= 0) {
+        $instDAO_tmp = new InstructorDAO();
+        $email = $_SESSION['usuario_email'] ?? '';
+        if (!empty($email)) {
+            $c = $instDAO_tmp->buscarPorColumna('EMAIL', $email);
+            if (!empty($c) && isset($c[0]['INSTRUCTOR_ID'])) {
+                $instructor_id = (int)$c[0]['INSTRUCTOR_ID'];
+            }
+        }
+    }
+}
+
+if (esInstructor() && $instructor_id > 0) {
+    $instDAO = new InstructorDAO();
+    $fichasIds = $instDAO->obtenerFichasIds($instructor_id);
+    $fichas = [];
+    if (!empty($fichasIds)) {
+        $fichas = $dao->obtenerPorIds($fichasIds);
+    }
+} else {
+    $fichas = $dao->obtenerTodas();
+}
+
 $total_fichas = count($fichas);
 $total_aprendices = array_sum(array_column($fichas, 'total_aprendices'));
 $fichas_activas = count(array_filter($fichas, function($f) { return $f['ESTADO'] == 'Activa'; }));
@@ -215,7 +242,6 @@ $fichas_activas = count(array_filter($fichas, function($f) { return $f['ESTADO']
     <?php include "../config/header.php"; ?>
 
     <main class="container" id="contenido-principal" style="display:none; opacity:0;">
-        <!-- Cabecera atractiva -->
         <div class="asistencia-header">
             <h1>
                 <i class="fas fa-clipboard-list"></i> Toma de Asistencia
@@ -223,7 +249,6 @@ $fichas_activas = count(array_filter($fichas, function($f) { return $f['ESTADO']
             <p>Seleccione una ficha para registrar la asistencia de los aprendices</p>
         </div>
 
-        <!-- Estadísticas modernas -->
         <div class="asistencia-stats-grid">
             <div class="asistencia-stat-card">
                 <div class="asistencia-stat-icon">
@@ -254,13 +279,11 @@ $fichas_activas = count(array_filter($fichas, function($f) { return $f['ESTADO']
             </div>
         </div>
 
-        <!-- Título de sección -->
         <div class="section-header-moderno">
             <h2><i class="fas fa-layer-group"></i> Fichas disponibles</h2>
             <span class="badge"><?= $total_fichas ?> fichas</span>
         </div>
 
-        <!-- Grid de fichas -->
         <?php if (empty($fichas)): ?>
             <div class="empty-state-moderno">
                 <i class="fas fa-folder-open"></i>

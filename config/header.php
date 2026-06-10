@@ -13,6 +13,8 @@ $nombreUsuario = $_SESSION['usuario_nombre'] ?? 'Invitado';
 $emailUsuario  = $_SESSION['usuario_email']  ?? 'usuario@sena.edu.co';
 $rolUsuario    = $_SESSION['usuario_rol']    ?? 'aprendiz';
 $iniciales     = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_nombre'], 0, 2) : 'IN';
+// Instructor id para enlaces rápidos
+$instId = (int)($_SESSION['usuario_ref_id'] ?? 0);
 ?>
 <header class="header">
     <div class="header-top">
@@ -75,10 +77,10 @@ $iniciales     = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_
                         <a href="<?= htmlspecialchars(app_url('mod/instructor_dashboard.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-tachometer-alt"></i> Mi Dashboard
                         </a>
-                        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php')) ?>" class="profile-menu-item">
+                        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php' . (esInstructor() && $instId ? '?instructor_id='.$instId : ''))) ?>" class="profile-menu-item">
                             <i class="fas fa-user-graduate"></i> Mis Aprendices
                         </a>
-                        <a href="<?= htmlspecialchars(app_url('mod/asistencias.php')) ?>" class="profile-menu-item">
+                        <a href="<?= htmlspecialchars(app_url('mod/asistencias.php' . (esInstructor() && $instId ? '?instructor_id='.$instId : ''))) ?>" class="profile-menu-item">
                             <i class="fas fa-calendar-check"></i> Asistencia
                         </a>
                         <a href="<?= htmlspecialchars(app_url('mod/evidencias.php')) ?>" class="profile-menu-item">
@@ -104,9 +106,6 @@ $iniciales     = isset($_SESSION['usuario_nombre']) ? substr($_SESSION['usuario_
                         </a>
                         <a href="<?= htmlspecialchars(app_url('mod/programas.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-book"></i> Programas
-                        </a>
-                        <a href="<?= htmlspecialchars(app_url('mod/fichas.php')) ?>" class="profile-menu-item">
-                            <i class="fas fa-layer-group"></i> Fichas
                         </a>
                         <a href="<?= htmlspecialchars(app_url('mod/alertas.php')) ?>" class="profile-menu-item">
                             <i class="fas fa-bell"></i> Alertas

@@ -1,15 +1,25 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/auth.php';
-if (!esAdmin()) { header('Location: ../evidencias.php'); exit; }
+// Instructores y administradores pueden editar evidencias
+if (!esAdmin() && !esInstructor()) { 
+    header('Location: ../evidencias.php'); 
+    exit; 
+}
 require_once __DIR__ . '/../../conexion/EvidenciaDAO.php';
 require_once __DIR__ . '/../../conexion/FichaDAO.php';
 
 $id = (int)($_GET['id'] ?? 0);
-if ($id <= 0) { header('Location: ../evidencias.php'); exit; }
+if ($id <= 0) { 
+    header('Location: ../evidencias.php'); 
+    exit; 
+}
 $evidenciaDAO = new EvidenciaDAO();
 $ev = $evidenciaDAO->obtenerPorId($id);
-if (!$ev) { header('Location: ../evidencias.php'); exit; }
+if (!$ev) { 
+    header('Location: ../evidencias.php'); 
+    exit; 
+}
 
 $fichas = (new FichaDAO())->obtenerTodas();
 $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
@@ -80,7 +90,7 @@ $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
             </div>
             <div class="content-card" style="border-radius: 0 0 20px 20px; margin-top: 0;">
                 <div class="card-body">
-                    <form id="form-evidencia" method="POST" action="guardar_evidencia.php">
+                    <form id="form-evidencia" method="POST" action="actualizar_evidencia.php">
                         <input type="hidden" name="evidencias_id" value="<?= $id ?>">
                         <div class="form-group">
                             <label><i class="fas fa-tag"></i> Nombre de la evidencia *</label>
@@ -89,6 +99,7 @@ $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
                         <div class="form-group">
                             <label><i class="fas fa-list"></i> Tipo de evidencia *</label>
                             <select name="tipo_evidencia" class="form-control" required>
+                                <option value="">Seleccione un tipo</option>
                                 <?php foreach ($tipos as $tipo): ?>
                                     <option value="<?= $tipo ?>" <?= ($ev['tipo_evidencia'] ?? '') === $tipo ? 'selected' : '' ?>><?= $tipo ?></option>
                                 <?php endforeach; ?>
@@ -103,12 +114,13 @@ $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
                             <input type="date" name="fecha_evidencia" class="form-control" value="<?= htmlspecialchars(substr($ev['fecha_evidencia'], 0, 10)) ?>" required>
                         </div>
                         <div class="form-group">
-                            <label><i class="fas fa-hourglass-half"></i> Tiempo de entrega</label>
-                            <input type="text" name="tiempo_entrega" class="form-control" value="<?= htmlspecialchars($ev['tiempo_entrega'] ?? '') ?>" placeholder="Ej: 7 días, 2025-12-31">
+                            <label><i class="fas fa-hourglass-half"></i> Fecha de entrega *</label>
+                            <input type="date" name="tiempo_entrega" class="form-control" value="<?= htmlspecialchars(substr($ev['tiempo_entrega'], 0, 10)) ?>" required>
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-layer-group"></i> Ficha *</label>
                             <select name="ficha_id" class="form-control" required>
+                                <option value="">Seleccione una ficha</option>
                                 <?php foreach ($fichas as $f): ?>
                                     <option value="<?= $f['FICHA_ID'] ?>" <?= (int)$ev['ficha_id'] === $f['FICHA_ID'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($f['CODIGO_FICHA']) ?>
@@ -135,14 +147,37 @@ $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
     <script src="../../js/menu.js"></script>
     <script>
         document.getElementById('form-evidencia').addEventListener('submit', function(e) {
-            // Mostrar loader y prevenir envíos duplicados (opcional)
-            const submitBtn = this.querySelector('button[type="submit"]');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-            // El formulario se enviará normalmente; si hay error de red o del backend,
-            // el usuario será redirigido con mensaje desde guardar_evidencia.php.
-            // No hay necesidad de fetch porque la acción ya maneja la redirección.
+            e.preventDefault();
+            
+            const nombre = this.querySelector('[name="nombre"]').value.trim();
+            const tipo = this.querySelector('[name="tipo_evidencia"]').value;
+            const ficha = this.querySelector('[name="ficha_id"]').value;
+            const fechaAsignacion = this.querySelector('[name="fecha_evidencia"]').value;
+            const fechaEntrega = this.querySelector('[name="tiempo_entrega"]').value;
+            
+            if (!nombre || !tipo || !ficha) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Complete los campos obligatorios (*)' });
+                return;
+            }
+            
+            if (!fechaAsignacion) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Seleccione la fecha de asignación' });
+                return;
+            }
+            
+            if (!fechaEntrega) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Seleccione la fecha de entrega' });
+                return;
+            }
+            
+            if (new Date(fechaEntrega) < new Date(fechaAsignacion)) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'La fecha de entrega no puede ser menor a la fecha de asignación' });
+                return;
+            }
+            
+            this.submit();
         });
+        
         if (typeof initThemeToggle === 'function') setTimeout(initThemeToggle, 100);
     </script>
 </body>

@@ -16,25 +16,11 @@ class HorarioAprendizDB extends BaseDatos {
 $db  = new HorarioAprendizDB();
 $ref = (int)($_SESSION['usuario_ref_id'] ?? 0);
 $uid = (int)($_SESSION['usuario_id']     ?? 0);
+$usuarioEmail = $_SESSION['usuario_email'] ?? '';
 
-// Obtener aprendiz
-$aprendiz = $ref ? $db->uno(
-    "SELECT a.*, f.FICHA_ID, f.CODIGO_FICHA, p.NOMBRE AS programa
-     FROM aprendiz a
-     LEFT JOIN ficha   f ON a.FICHA_ID   = f.FICHA_ID
-     LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
-     WHERE a.APRENDIZ_ID = :id", [':id'=>$ref]
-) : null;
-
-if (!$aprendiz && $uid) {
-    $aprendiz = $db->uno(
-        "SELECT a.*, f.FICHA_ID, f.CODIGO_FICHA, p.NOMBRE AS programa
-         FROM aprendiz a
-         LEFT JOIN ficha   f ON a.FICHA_ID   = f.FICHA_ID
-         LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
-         WHERE a.usuario_id = :id", [':id'=>$uid]
-    );
-}
+require_once __DIR__ . '/../../conexion/AprendizDAO.php';
+$aprendizDAO = new AprendizDAO();
+$aprendiz = $aprendizDAO->obtenerPorSesion($ref, $uid, $usuarioEmail);
 
 $fichaId   = (int)($aprendiz['FICHA_ID'] ?? 0);
 $trimestre = $_GET['trimestre'] ?? date('Y').'-1';

@@ -10,8 +10,26 @@ $dao = new EvidenciaDAO();
 $regionalDAO = new RegionalDAO();
 $centroDAO = new CentroDAO();
 
-$rol = $_SESSION['rol'] ?? 'aprendiz';
-$usuarioId = $_SESSION['usuario_id'] ?? null;
+$rol = $_SESSION['usuario_rol'] ?? 'aprendiz';
+$usuarioId = null;
+if (esAdmin()) {
+    $usuarioId = $_SESSION['usuario_id'] ?? null;
+} elseif (esInstructor()) {
+    $usuarioId = $_SESSION['usuario_ref_id'] ?? null;
+    if (empty($usuarioId)) {
+        $email = $_SESSION['usuario_email'] ?? '';
+        if (!empty($email)) {
+            require_once __DIR__ . '/../conexion/instructorDAO.php';
+            $instDAO = new InstructorDAO();
+            $c = $instDAO->buscarPorColumna('EMAIL', $email);
+            if (!empty($c) && isset($c[0]['INSTRUCTOR_ID'])) {
+                $usuarioId = $c[0]['INSTRUCTOR_ID'];
+            }
+        }
+    }
+} else {
+    $usuarioId = $_SESSION['usuario_id'] ?? null;
+}
 
 // Filtros (solo para admin)
 $regionalId = isset($_GET['regional_id']) ? (int)$_GET['regional_id'] : null;
@@ -75,7 +93,7 @@ $evidencias = $dao->obtenerEvidenciasConFiltros($rol, $usuarioId, $regionalId, $
                 </h1>
                 <p class="page-subtitle">Listado de evidencias asignadas por ficha</p>
             </div>
-            <?php if (esAdmin()): ?>
+            <?php if (esAdmin() || esInstructor()): ?>
             <a href="crud/crear_evidencia.php" class="btn-create">
                 <i class="fas fa-plus"></i> Crear Evidencia
             </a>

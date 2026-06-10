@@ -28,26 +28,14 @@ class PerfilDB extends BaseDatos {
 $db = new PerfilDB();
 
 if (esAprendiz()) {
-    $sql = "SELECT
-                a.APRENDIZ_ID, a.TIPO_DOCUMENTO, a.NUMERO_DOCUMENTO,
-                a.NOMBRES, a.APELLIDOS, a.EMAIL, a.TELEFONO,
-                a.FECHA_NACIMIENTO, a.GENERO, a.ESTADO_ACADEMICO,
-                a.FECHA_REGISTRO,
-                f.FICHA_ID, f.CODIGO_FICHA, f.FECHA_INICIO, f.FECHA_FIN, f.ESTADO AS ficha_estado,
-                p.NOMBRE AS programa_nombre, p.NIVEL_FORMACION, p.DURACION_MESES,
-                c.NOMBRE AS centro_nombre, c.DIRECCION AS centro_dir, c.TELEFONO AS centro_tel,
-                r.NOMBRE AS regional_nombre, r.CIUDAD AS regional_ciudad,
-                pe.PROMEDIO_GENERAL, pe.PORCENTAJE_ASISTENCIA, pe.NIVEL_RIESGO_GLOBAL,
-                pe.COMPETENCIAS_APROBADAS, pe.COMPETENCIAS_PENDIENTES
-            FROM aprendiz a
-            LEFT JOIN ficha    f  ON a.FICHA_ID     = f.FICHA_ID
-            LEFT JOIN programa p  ON f.PROGRAMA_ID  = p.PROGRAMA_ID
-            LEFT JOIN centro   c  ON f.CENTRO_ID    = c.CENTRO_ID
-            LEFT JOIN regional r  ON c.REGIONAL_ID  = r.REGIONAL_ID
-            LEFT JOIN progreso_estudiante pe ON a.APRENDIZ_ID = pe.ESTUDIANTE_ID
-            WHERE " . ($refId > 0 ? "a.APRENDIZ_ID = :id" : "a.usuario_id = :id") . "
-            ORDER BY pe.FECHA_ACTUALIZACION DESC LIMIT 1";
-    $datos = $db->query($sql, [':id' => $refId > 0 ? $refId : $usuarioId]);
+    require_once __DIR__ . '/../conexion/AprendizDAO.php';
+
+    $aprendizId   = (int)($_SESSION['usuario_ref_id'] ?? 0);
+    $usuarioId    = (int)($_SESSION['usuario_id'] ?? 0);
+    $usuarioEmail = $_SESSION['usuario_email'] ?? '';
+
+    $aprendizDAO = new AprendizDAO();
+    $datos = $aprendizDAO->obtenerPorSesion($aprendizId, $usuarioId, $usuarioEmail);
 
 } elseif (esInstructor()) {
     $sql = "SELECT
@@ -410,59 +398,8 @@ $rolLabel = match($rolUsuario) {
             </div>
         </div>
 
-        <!-- Progreso académico -->
-        <div class="perfil-card">
-            <div class="perfil-card-header"><i class="fas fa-chart-line"></i> Progreso Académico</div>
-            <div class="perfil-card-body">
-                <?php
-                $prom = (float)($datos['PROMEDIO_GENERAL'] ?? 0);
-                $pct  = (float)($datos['PORCENTAJE_ASISTENCIA'] ?? 0);
-                $riesgo = $datos['NIVEL_RIESGO_GLOBAL'] ?? 'Bajo';
-                $pctColor = $pct >= 80 ? '#16a34a' : ($pct >= 60 ? '#f59e0b' : '#dc2626');
-                $promColor = $prom >= 3.5 ? '#16a34a' : ($prom >= 3 ? '#f59e0b' : '#dc2626');
-                ?>
-                <div style="margin-bottom:16px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
-                        <span style="font-size:12px;font-weight:700;color:var(--color-texto-secundario);">ASISTENCIA</span>
-                        <strong style="color:<?= $pctColor ?>;"><?= $pct ?>%</strong>
-                    </div>
-                    <div class="pct-bar-bg"><div class="pct-bar-fill" style="width:<?= min($pct,100) ?>%;background:<?= $pctColor ?>;"></div></div>
-                </div>
-                <div style="margin-bottom:16px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
-                        <span style="font-size:12px;font-weight:700;color:var(--color-texto-secundario);">PROMEDIO</span>
-                        <strong style="color:<?= $promColor ?>;"><?= number_format($prom,1) ?> / 5.0</strong>
-                    </div>
-                    <div class="pct-bar-bg"><div class="pct-bar-fill" style="width:<?= min($prom/5*100,100) ?>%;background:<?= $promColor ?>;"></div></div>
-                </div>
-                <div class="mini-stats">
-                    <div class="mini-stat">
-                        <div class="mini-stat-val"><?= (int)($datos['COMPETENCIAS_APROBADAS'] ?? 0) ?></div>
-                        <div class="mini-stat-lbl">Aprobadas</div>
-                    </div>
-                    <div class="mini-stat">
-                        <div class="mini-stat-val"><?= (int)($datos['COMPETENCIAS_PENDIENTES'] ?? 0) ?></div>
-                        <div class="mini-stat-lbl">Pendientes</div>
-                    </div>
-                </div>
-                <div style="margin-top:14px;display:flex;align-items:center;gap:8px;">
-                    <span style="font-size:12px;font-weight:700;color:var(--color-texto-secundario);">NIVEL DE RIESGO:</span>
-                    <?php
-                    $rc = match(strtolower($riesgo)) {
-                        'alto'  => ['chip-red',    '#dc2626'],
-                        'medio' => ['chip-yellow', '#f59e0b'],
-                        default => ['chip-green',  '#16a34a'],
-                    };
-                    ?>
-                    <span class="chip <?= $rc[0] ?>"><?= htmlspecialchars($riesgo) ?></span>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Accesos rápidos -->
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;">
-        <a href="<?= htmlspecialchars(app_url('mod/aprendiz_perfil.php')) ?>" class="btn-action"><i class="fas fa-chart-bar"></i> Mis estadísticas</a>
         <a href="<?= htmlspecialchars(app_url('mod/aprendiz_horario.php')) ?>" class="btn-action"><i class="fas fa-calendar-week"></i> Mi horario</a>
         <a href="<?= htmlspecialchars(app_url('mod/aprendiz_compañeros.php')) ?>" class="btn-action"><i class="fas fa-users"></i> Mis compañeros</a>
         <a href="<?= htmlspecialchars(app_url('mod/aprendiz_faltas.php')) ?>" class="btn-cancel"><i class="fas fa-calendar-times"></i> Mis faltas</a>
@@ -516,7 +453,7 @@ $rolLabel = match($rolUsuario) {
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <a href="<?= htmlspecialchars(app_url('mod/instructor_dashboard.php')) ?>" class="btn-action"><i class="fas fa-tachometer-alt"></i> Mi Dashboard</a>
-        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php')) ?>" class="btn-action"><i class="fas fa-users"></i> Mis Aprendices</a>
+        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php' . (esInstructor() ? '?instructor_id=' . (int)($_SESSION['usuario_ref_id'] ?? 0) : ''))) ?>" class="btn-action"><i class="fas fa-users"></i> Mis Aprendices</a>
     </div>
 
     <!-- ════ ADMIN ════════════════════════════════════════════════ -->

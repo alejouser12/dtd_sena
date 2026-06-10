@@ -58,50 +58,92 @@ class FichaDAO extends BaseDatos
     }
 
     /**
-     * Obtiene una ficha por ID con toda la información relacionada
+     * Obtiene una ficha por ID con toda la información relacionada.
+     * Versión robusta: consultas separadas para evitar fallos por JOIN.
      * @param int $id
      * @return array|null
      */
     public function obtenerPorId($id)
     {
-        $sql = "SELECT 
-                    f.FICHA_ID,
-                    f.CODIGO_FICHA,
-                    f.FECHA_INICIO,
-                    f.FECHA_FIN,
-                    f.ESTADO,
-                    f.PROGRAMA_ID,
-                    f.CENTRO_ID,
-                    p.NOMBRE as programa_nombre,
-                    p.NIVEL_FORMACION,
-                    c.NOMBRE as centro_nombre,
-                    c.CODIGO as centro_codigo,
-                    c.DIRECCION as centro_direccion,
-                    c.TELEFONO as centro_telefono,
-                    r.NOMBRE as regional_nombre,
-                    r.CIUDAD as regional_ciudad
-                FROM ficha f
-                JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
-                LEFT JOIN centro c ON f.CENTRO_ID = c.CENTRO_ID
-                LEFT JOIN regional r ON c.REGIONAL_ID = r.REGIONAL_ID
-                WHERE f.FICHA_ID = :id";
-
-        $stmt = $this->ejecutarPreparado($sql, [':id' => $id]);
+        // 1. Obtener datos básicos de la ficha
+        $sqlFicha = "SELECT FICHA_ID, CODIGO_FICHA, FECHA_INICIO, FECHA_FIN, ESTADO, PROGRAMA_ID, CENTRO_ID
+                     FROM ficha WHERE FICHA_ID = :id";
+        $stmt = $this->ejecutarPreparado($sqlFicha, [':id' => $id]);
         if (!$stmt) {
+            error_log("FichaDAO::obtenerPorId($id) - falló consulta básica");
             return null;
         }
-
         $ficha = $stmt->fetch();
         if (!$ficha) {
+            error_log("FichaDAO::obtenerPorId($id) - ficha no existe");
             return null;
         }
 
-        // Contar aprendices
+        // 2. Cargar información del programa si existe
+        if (!empty($ficha['PROGRAMA_ID'])) {
+            $sqlProg = "SELECT NOMBRE as programa_nombre, NIVEL_FORMACION 
+                        FROM programa WHERE PROGRAMA_ID = :pid";
+            $stmtProg = $this->ejecutarPreparado($sqlProg, [':pid' => $ficha['PROGRAMA_ID']]);
+            if ($stmtProg && ($prog = $stmtProg->fetch())) {
+                $ficha['programa_nombre'] = $prog['programa_nombre'];
+                $ficha['NIVEL_FORMACION'] = $prog['NIVEL_FORMACION'];
+            } else {
+                $ficha['programa_nombre'] = null;
+                $ficha['NIVEL_FORMACION'] = null;
+            }
+        } else {
+            $ficha['programa_nombre'] = null;
+            $ficha['NIVEL_FORMACION'] = null;
+        }
+
+        // 3. Cargar información del centro si existe
+        if (!empty($ficha['CENTRO_ID'])) {
+            $sqlCentro = "SELECT NOMBRE as centro_nombre, CODIGO as centro_codigo, 
+                                 DIRECCION as centro_direccion, TELEFONO as centro_telefono
+                          FROM centro WHERE CENTRO_ID = :cid";
+            $stmtCentro = $this->ejecutarPreparado($sqlCentro, [':cid' => $ficha['CENTRO_ID']]);
+            if ($stmtCentro && ($centro = $stmtCentro->fetch())) {
+                $ficha['centro_nombre'] = $centro['centro_nombre'];
+                $ficha['centro_codigo'] = $centro['centro_codigo'];
+                $ficha['centro_direccion'] = $centro['centro_direccion'];
+                $ficha['centro_telefono'] = $centro['centro_telefono'];
+
+                // 4. Cargar regional a través del centro
+                $sqlReg = "SELECT r.NOMBRE as regional_nombre, r.CIUDAD as regional_ciudad
+                           FROM regional r
+                           INNER JOIN centro c ON c.REGIONAL_ID = r.REGIONAL_ID
+                           WHERE c.CENTRO_ID = :cid";
+                $stmtReg = $this->ejecutarPreparado($sqlReg, [':cid' => $ficha['CENTRO_ID']]);
+                if ($stmtReg && ($reg = $stmtReg->fetch())) {
+                    $ficha['regional_nombre'] = $reg['regional_nombre'];
+                    $ficha['regional_ciudad'] = $reg['regional_ciudad'];
+                } else {
+                    $ficha['regional_nombre'] = null;
+                    $ficha['regional_ciudad'] = null;
+                }
+            } else {
+                $ficha['centro_nombre'] = null;
+                $ficha['centro_codigo'] = null;
+                $ficha['centro_direccion'] = null;
+                $ficha['centro_telefono'] = null;
+                $ficha['regional_nombre'] = null;
+                $ficha['regional_ciudad'] = null;
+            }
+        } else {
+            $ficha['centro_nombre'] = null;
+            $ficha['centro_codigo'] = null;
+            $ficha['centro_direccion'] = null;
+            $ficha['centro_telefono'] = null;
+            $ficha['regional_nombre'] = null;
+            $ficha['regional_ciudad'] = null;
+        }
+
+        // 5. Contar aprendices
         $sqlAprendices = "SELECT COUNT(*) as total FROM aprendiz WHERE FICHA_ID = :id";
         $stmtAprendices = $this->ejecutarPreparado($sqlAprendices, [':id' => $id]);
         $ficha['total_aprendices'] = ($stmtAprendices && ($row = $stmtAprendices->fetch())) ? (int)$row['total'] : 0;
 
-        // Valores por defecto para campos que podrían no existir en la BD
+        // 6. Valores por defecto para campos que no están en BD
         $ficha['instructor_nombres'] = null;
         $ficha['instructor_apellidos'] = null;
         $ficha['instructor_email'] = null;
@@ -259,6 +301,27 @@ class FichaDAO extends BaseDatos
         $sql = "DELETE FROM ficha WHERE FICHA_ID = :id";
         $stmt = $this->ejecutarPreparado($sql, [':id' => $id]);
         return $stmt ? true : false;
+    }
+
+        /**
+     * Obtiene fichas por una lista de IDs
+     * @param array $ids
+     * @return array
+     */
+    public function obtenerPorIds($ids)
+    {
+        if (empty($ids)) return [];
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = "SELECT 
+                    f.*,
+                    p.NOMBRE as programa_nombre,
+                    (SELECT COUNT(*) FROM aprendiz WHERE FICHA_ID = f.FICHA_ID) as total_aprendices
+                FROM ficha f
+                LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
+                WHERE f.FICHA_ID IN ($placeholders)
+                ORDER BY f.CODIGO_FICHA";
+        $stmt = $this->ejecutarPreparado($sql, $ids);
+        return $stmt ? $stmt->fetchAll() : [];
     }
 }
 ?>

@@ -14,14 +14,11 @@ require_once __DIR__ . '/../conexion/AsistenciaDAO.php';
 $aprendizDAO   = new AprendizDAO();
 $asistenciaDAO = new AsistenciaDAO();
 
-// Buscar aprendiz por usuario_ref_id o por usuario_id
+// Buscar aprendiz por usuario_ref_id, usuario_id o email
 $aprendizId = (int)($_SESSION['usuario_ref_id'] ?? 0);
-$aprendiz   = $aprendizId ? $aprendizDAO->obtenerPorId($aprendizId) : null;
-
-if (!$aprendiz) {
-    $usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
-    $aprendiz  = $usuarioId ? $aprendizDAO->obtenerPorUsuarioId($usuarioId) : null;
-}
+$usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
+$usuarioEmail = $_SESSION['usuario_email'] ?? '';
+$aprendiz = $aprendizDAO->obtenerPorSesion($aprendizId, $usuarioId, $usuarioEmail);
 
 $resumen  = $aprendiz ? $asistenciaDAO->obtenerResumenAprendiz($aprendiz['APRENDIZ_ID']) : [];
 $pct      = ($resumen['total_dias'] ?? 0) > 0

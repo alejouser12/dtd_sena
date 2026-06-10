@@ -3,21 +3,19 @@ session_start();
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../conexion/AprendizDAO.php';
+require_once __DIR__ . '/../conexion/JustificacionDAO.php';
 
 if (!esAprendiz()) {
     redirect_to('index.php');
 }
 
 $aprendizDAO = new AprendizDAO();
-$usuarioId = $_SESSION['usuario_id'] ?? 0;
+$justificacionDAO = new JustificacionDAO();
+$aprendizId  = (int)($_SESSION['usuario_ref_id'] ?? 0);
+$usuarioId   = (int)($_SESSION['usuario_id'] ?? 0);
+$usuarioEmail = $_SESSION['usuario_email'] ?? '';
 
-$sql = "SELECT APRENDIZ_ID, NOMBRES, APELLIDOS
-        FROM aprendiz
-        WHERE usuario_id = :usuario_id
-        LIMIT 1";
-$stmt = $aprendizDAO->ejecutarPreparado($sql, [':usuario_id' => $usuarioId]);
-$aprendiz = $stmt ? $stmt->fetch() : null;
-
+$aprendiz = $aprendizDAO->obtenerPorSesion($aprendizId, $usuarioId, $usuarioEmail);
 if (!$aprendiz) {
     redirect_to('index.php');
 }
@@ -25,7 +23,7 @@ if (!$aprendiz) {
 $aprendizId = $aprendiz['APRENDIZ_ID'];
 
 $faltas = $aprendizDAO->obtenerFaltasConJustificacionPendiente($aprendizId);
-
+$justificaciones = $justificacionDAO->obtenerJustificacionesPorAprendiz($aprendizId);
 $historialCompleto = $aprendizDAO->obtenerAsistencia($aprendizId, 50);
 ?>
 
@@ -97,6 +95,14 @@ $historialCompleto = $aprendizDAO->obtenerAsistencia($aprendizId, 50);
             font-size: 11px;
             font-weight: 700;
         }
+        .badge-red {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
         .btn-justificar {
             background: var(--color-verde-1);
             color: white;
@@ -126,6 +132,51 @@ $historialCompleto = $aprendizDAO->obtenerAsistencia($aprendizId, 50);
         .dark-mode .badge-justificada {
             background: #14532d;
             color: #bbf7d0;
+        }
+        .dark-mode .badge-red {
+            background: #7f1d1d;
+            color: #fecaca;
+        }
+        /* === ESTILOS PARA MODALES DE SWEETALERT2 (claro/oscuro) === */
+        .swal2-popup {
+            background: var(--color-blanco) !important;
+            color: var(--color-texto) !important;
+            border-radius: 20px !important;
+            padding: 1.5rem !important;
+        }
+        .dark-mode .swal2-popup {
+            background: var(--color-gris-cuerpo) !important;
+            border: 1px solid var(--border-color) !important;
+        }
+        .swal2-textarea, .swal2-file {
+            background: var(--color-blanco) !important;
+            color: var(--color-texto) !important;
+            border: 2px solid var(--border-color) !important;
+            border-radius: 12px !important;
+            font-size: 14px !important;
+            padding: 12px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .dark-mode .swal2-textarea, .dark-mode .swal2-file {
+            background: var(--color-blanco-opaco) !important;
+            border-color: #444 !important;
+            color: #eee !important;
+        }
+        .swal2-confirm, .swal2-cancel {
+            border-radius: 30px !important;
+            padding: 10px 20px !important;
+            font-weight: bold !important;
+        }
+        .swal2-title {
+            color: var(--color-texto) !important;
+        }
+        .swal2-html-container {
+            color: var(--color-texto-secundario) !important;
+        }
+        .swal2-popup {
+            width: 32em !important;
+            max-width: 90% !important;
         }
         @media (max-width: 768px) {
             .tabla-faltas th, .tabla-faltas td {
@@ -210,6 +261,48 @@ $historialCompleto = $aprendizDAO->obtenerAsistencia($aprendizId, 50);
         </div>
         <?php endif; ?>
 
+        <?php if (!empty($justificaciones)): ?>
+        <div class="faltas-pendientes">
+            <h2><i class="fas fa-file-contract"></i> Solicitudes de justificación</h2>
+            <div class="tabla-faltas">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha falta</th>
+                            <th>Estado</th>
+                            <th>Enviado</th>
+                            <th>Comentario</th>
+                            <th>Archivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($justificaciones as $solicitud):
+                            $estado = $solicitud['ESTADO'];
+                            $badgeClass = $estado === 'aprobada' ? 'badge-justificada' : ($estado === 'rechazada' ? 'badge-red' : 'badge-pendiente');
+                            $textoEstado = $estado === 'aprobada' ? 'Aprobada' : ($estado === 'rechazada' ? 'Rechazada' : 'Pendiente');
+                        ?>
+                        <tr>
+                            <td><?= date('d/m/Y', strtotime($solicitud['fecha_falta'])) ?></td>
+                            <td><span class="<?= $badgeClass ?>"><?= $textoEstado ?></span></td>
+                            <td><?= !empty($solicitud['FECHA_RESPUESTA']) ? date('d/m/Y', strtotime($solicitud['FECHA_RESPUESTA'])) : 'Sin respuesta' ?></td>
+                            <td><?= nl2br(htmlspecialchars($solicitud['COMENTARIO_INSTRUCTOR'] ?? '—')) ?></td>
+                            <td>
+                                <?php if (!empty($solicitud['ARCHIVO'])): ?>
+                                    <a href="<?= htmlspecialchars(asset_url($solicitud['ARCHIVO'])) ?>" target="_blank" class="btn-ver-archivo" style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--color-verde-1); color: white; border-radius: 20px; text-decoration: none; font-size: 12px; font-weight: 600; transition: 0.2s;">
+                                        <i class="fas fa-eye"></i> Ver anexo
+                                    </a>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <h2><i class="fas fa-history"></i> Historial completo de asistencias</h2>
         <div class="tabla-faltas" style="margin-top: 15px;">
             <table>
@@ -279,8 +372,8 @@ $historialCompleto = $aprendizDAO->obtenerAsistencia($aprendizId, 50);
         </div>
 
         <div style="margin-top: 30px; text-align: center;">
-            <a href="<?= app_url('mod/aprendiz_perfil.php') ?>" class="btn-view-all">
-                <i class="fas fa-arrow-left"></i> Volver a Mi Perfil
+            <a href="<?= app_url('mod/aprendiz/index.php') ?>" class="btn-view-all">
+                <i class="fas fa-arrow-left"></i> Volver al Inicio
             </a>
         </div>
     </main>
@@ -299,27 +392,49 @@ $historialCompleto = $aprendizDAO->obtenerAsistencia($aprendizId, 50);
             Swal.fire({
                 title: 'Justificar falta del ' + fecha,
                 html: `
-                    <textarea id="justificacion_texto" class="swal2-textarea" placeholder="Escribe tu justificación aquí..." rows="4" style="width:100%;"></textarea>
+                    <div style="text-align:left; margin-bottom:10px;">
+                        <label for="justificacion_texto" style="display:block; margin-bottom:8px; font-weight:600;">Explicación:</label>
+                        <textarea id="justificacion_texto" class="swal2-textarea" 
+                                  placeholder="Describe el motivo de tu ausencia..." 
+                                  rows="4"
+                                  style="width:100%; border-radius:12px; border:2px solid var(--border-color); padding:12px; box-sizing:border-box; background:var(--color-blanco); color:var(--color-texto);"></textarea>
+                    </div>
+                    <div style="text-align:left; margin-top:15px;">
+                        <label for="justificacion_archivo" style="display:block; margin-bottom:8px; font-weight:600;">Adjuntar evidencia (opcional):</label>
+                        <input id="justificacion_archivo" type="file" accept="image/*,application/pdf" 
+                               style="width:100%; padding:10px; border-radius:12px; border:2px dashed var(--border-color); background:var(--color-blanco); color:var(--color-texto); box-sizing:border-box;" />
+                        <small style="display:block; margin-top:5px; color:var(--color-texto-secundario);">Formatos: JPG, PNG, PDF (máx. 5MB)</small>
+                    </div>
                 `,
                 showCancelButton: true,
                 confirmButtonText: 'Enviar justificación',
                 cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#39a900',
+                focusConfirm: false,
                 preConfirm: () => {
                     const texto = document.getElementById('justificacion_texto').value;
-                    if (!texto.trim()) {
-                        Swal.showValidationMessage('Debes escribir una justificación');
+                    const archivo = document.getElementById('justificacion_archivo').files[0];
+                    if (!texto.trim() && !archivo) {
+                        Swal.showValidationMessage('Debes escribir una explicación o adjuntar un archivo');
                         return false;
                     }
-                    return texto;
+                    if (archivo && archivo.size > 5 * 1024 * 1024) {
+                        Swal.showValidationMessage('El archivo no debe superar los 5MB');
+                        return false;
+                    }
+                    return { texto: texto.trim(), archivo: archivo };
                 }
             }).then((result) => {
                 if (result.isConfirmed) {
-                    fetch('<?= app_url('mod/guardar_justificacion.php') ?>', {
+                    const formData = new FormData();
+                    formData.append('asistencia_id', asistenciaId);
+                    formData.append('justificacion', result.value.texto);
+                    if (result.value.archivo) {
+                        formData.append('archivo', result.value.archivo);
+                    }
+                    fetch('<?= htmlspecialchars(app_url('mod/guardar_justificacion.php')) ?>', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: 'asistencia_id=' + asistenciaId + '&justificacion=' + encodeURIComponent(result.value)
+                        body: formData
                     })
                     .then(response => response.json())
                     .then(data => {

@@ -27,6 +27,13 @@ class AprendizDAO extends BaseDatos
                     a.FECHA_REGISTRO,
                     a.FICHA_ID,
                     f.CODIGO_FICHA,
+                    f.FECHA_INICIO,
+                    f.FECHA_FIN,
+                    f.ESTADO AS ficha_estado,
+                    f.CENTRO_ID,
+                    c.NOMBRE AS centro_nombre,
+                    r.NOMBRE AS regional_nombre,
+                    r.CIUDAD AS regional_ciudad,
                     p.NOMBRE AS programa_nombre,
                     p.NIVEL_FORMACION,
                     p.PROGRAMA_ID,
@@ -34,10 +41,15 @@ class AprendizDAO extends BaseDatos
                     pe.PROMEDIO_GENERAL,
                     pe.PORCENTAJE_ASISTENCIA,
                     pe.COMPETENCIAS_APROBADAS,
-                    pe.COMPETENCIAS_PENDIENTES
+                    pe.COMPETENCIAS_PENDIENTES,
+                    CONCAT(gestor.NOMBRES, ' ', gestor.APELLIDOS) AS gestor_nombre,
+                    gestor.EMAIL AS gestor_email
                 FROM aprendiz a
                 LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
                 LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
+                LEFT JOIN centro c ON f.CENTRO_ID = c.CENTRO_ID
+                LEFT JOIN regional r ON c.REGIONAL_ID = r.REGIONAL_ID
+                LEFT JOIN instructor gestor ON f.FICHA_ID = gestor.GESTOR_FICHA_ID
                 LEFT JOIN progreso_estudiante pe ON a.APRENDIZ_ID = pe.ESTUDIANTE_ID
                 WHERE a.APRENDIZ_ID = :id
                 ORDER BY pe.FECHA_ACTUALIZACION DESC
@@ -56,12 +68,81 @@ class AprendizDAO extends BaseDatos
     }
 
     /**
+     * Busca un aprendiz usando primero la referencia, luego usuario_id y finalmente email.
+     */
+    public function obtenerPorSesion($referenciaId, $usuarioId, $email = null)
+    {
+        if ($referenciaId > 0) {
+            $aprendiz = $this->obtenerPorId($referenciaId);
+            if ($aprendiz) {
+                return $aprendiz;
+            }
+        }
+
+        if ($usuarioId > 0 && !empty($email)) {
+            $aprendiz = $this->obtenerPorUsuarioId($usuarioId, $email, true);
+            if ($aprendiz) {
+                return $aprendiz;
+            }
+        }
+
+        if ($usuarioId > 0) {
+            $aprendiz = $this->obtenerPorUsuarioId($usuarioId, $email);
+            if ($aprendiz) {
+                return $aprendiz;
+            }
+        }
+
+        if (!empty($email)) {
+            $aprendiz = $this->obtenerPorUsuarioId(0, $email);
+            if ($aprendiz) {
+                return $aprendiz;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Obtiene aprendices paginados con su ficha y programa
      */
-    public function obtenerAprendicesPaginados($inicio = 0, $cantidad = 10, $filtroFichas = false)
+    public function obtenerAprendicesPaginados($inicio = 0, $cantidad = 10, $filtroFichas = false, $fichasIds = [])
     {
         $inicio = (int)$inicio;
         $cantidad = (int)$cantidad;
+        // Si se pasan $fichasIds usamos filtro por IN
+        if (!empty($fichasIds)) {
+            $placeholders = implode(',', array_fill(0, count($fichasIds), '?'));
+            $sql = "SELECT 
+                        a.APRENDIZ_ID,
+                        a.TIPO_DOCUMENTO,
+                        a.NUMERO_DOCUMENTO,
+                        a.NOMBRES,
+                        a.APELLIDOS,
+                        a.FECHA_NACIMIENTO,
+                        a.GENERO,
+                        a.TELEFONO,
+                        a.EMAIL,
+                        a.ESTADO_ACADEMICO,
+                        a.FECHA_REGISTRO,
+                        f.CODIGO_FICHA,
+                        f.FICHA_ID,
+                        p.NOMBRE AS PROGRAMA_NOMBRE,
+                        pe.NIVEL_RIESGO_GLOBAL,
+                        pe.PROMEDIO_GENERAL,
+                        pe.PORCENTAJE_ASISTENCIA,
+                        pe.COMPETENCIAS_APROBADAS,
+                        pe.COMPETENCIAS_PENDIENTES
+                    FROM aprendiz a
+                    LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
+                    LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
+                    LEFT JOIN progreso_estudiante pe ON a.APRENDIZ_ID = pe.ESTUDIANTE_ID
+                    WHERE a.FICHA_ID IN ($placeholders)
+                    ORDER BY a.APELLIDOS, a.NOMBRES
+                    LIMIT $inicio, $cantidad";
+            $stmt = $this->ejecutarPreparado($sql, $fichasIds);
+            return $stmt ? $stmt->fetchAll() : [];
+        }
 
         if ($filtroFichas) {
             $sql = "SELECT 
@@ -131,8 +212,20 @@ class AprendizDAO extends BaseDatos
     /**
      * Cuenta el total de aprendices
      */
-    public function contarAprendices($filtroFichas = false)
+    public function contarAprendices($filtroFichas = false, $fichasIds = [])
     {
+        if (!empty($fichasIds)) {
+            $placeholders = implode(',', array_fill(0, count($fichasIds), '?'));
+            $sql = "SELECT COUNT(*) as total FROM aprendiz WHERE FICHA_ID IN ($placeholders)";
+            $stmt = $this->ejecutarPreparado($sql, $fichasIds);
+            if (!$stmt) {
+                error_log("Error en contarAprendices (fichas): " . $this->imprimirError());
+                return 0;
+            }
+            $row = $stmt->fetch();
+            return $row['total'] ?? 0;
+        }
+
         if ($filtroFichas) {
             $sql = "SELECT COUNT(*) as total FROM aprendiz WHERE FICHA_ID IS NOT NULL";
         } else {
@@ -150,7 +243,7 @@ class AprendizDAO extends BaseDatos
     /**
      * Busca aprendices por columna con paginación
      */
-    public function buscarPorColumnaPaginado($columna, $valor, $inicio = 0, $cantidad = 10)
+    public function buscarPorColumnaPaginado($columna, $valor, $inicio = 0, $cantidad = 10, $fichasIds = [])
     {
         $columnasPermitidas = [
             'a.NOMBRES', 
@@ -170,7 +263,7 @@ class AprendizDAO extends BaseDatos
         $cantidad = (int)$cantidad;
         $valor = addslashes($valor);
 
-        $sql = "SELECT 
+        $select = "SELECT 
                     a.APRENDIZ_ID,
                     a.TIPO_DOCUMENTO,
                     a.NUMERO_DOCUMENTO,
@@ -194,10 +287,16 @@ class AprendizDAO extends BaseDatos
                 LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
                 LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
                 LEFT JOIN progreso_estudiante pe ON a.APRENDIZ_ID = pe.ESTUDIANTE_ID
-                WHERE $columna LIKE '%$valor%'
-                ORDER BY a.APELLIDOS, a.NOMBRES
-                LIMIT $inicio, $cantidad";
+                WHERE $columna LIKE '%$valor%'";
 
+        if (!empty($fichasIds)) {
+            $placeholders = implode(',', array_fill(0, count($fichasIds), '?'));
+            $sql = $select . " AND a.FICHA_ID IN ($placeholders) ORDER BY a.APELLIDOS, a.NOMBRES LIMIT $inicio, $cantidad";
+            $stmt = $this->ejecutarPreparado($sql, $fichasIds);
+            return $stmt ? $stmt->fetchAll() : [];
+        }
+
+        $sql = $select . " ORDER BY a.APELLIDOS, a.NOMBRES LIMIT $inicio, $cantidad";
         $this->Consulta_ID = $this->ejecutarSQL($sql);
         if (!$this->Consulta_ID) {
             error_log("Error en buscarPorColumnaPaginado: " . $this->imprimirError());
@@ -209,7 +308,7 @@ class AprendizDAO extends BaseDatos
     /**
      * Cuenta resultados de búsqueda
      */
-    public function contarBusqueda($columna, $valor)
+    public function contarBusqueda($columna, $valor, $fichasIds = [])
     {
         $columnasPermitidas = [
             'a.NOMBRES', 
@@ -226,12 +325,24 @@ class AprendizDAO extends BaseDatos
         }
 
         $valor = addslashes($valor);
-        $sql = "SELECT COUNT(*) as total 
+        $baseSql = "SELECT COUNT(*) as total 
                 FROM aprendiz a
                 LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
                 WHERE $columna LIKE '%$valor%'";
 
-        $this->Consulta_ID = $this->ejecutarSQL($sql);
+        if (!empty($fichasIds)) {
+            $placeholders = implode(',', array_fill(0, count($fichasIds), '?'));
+            $sql = $baseSql . " AND a.FICHA_ID IN ($placeholders)";
+            $stmt = $this->ejecutarPreparado($sql, $fichasIds);
+            if (!$stmt) {
+                error_log("Error en contarBusqueda (fichas): " . $this->imprimirError());
+                return 0;
+            }
+            $row = $stmt->fetch();
+            return $row['total'] ?? 0;
+        }
+
+        $this->Consulta_ID = $this->ejecutarSQL($baseSql);
         if (!$this->Consulta_ID) {
             error_log("Error en contarBusqueda: " . $this->imprimirError());
             return 0;
@@ -526,20 +637,54 @@ class AprendizDAO extends BaseDatos
     // ==================== MÉTODOS PARA EL PERFIL Y ESTADÍSTICAS ====================
 
     /**
-     * Obtiene un aprendiz por su ID de usuario
+     * Obtiene un aprendiz por su ID de usuario o por email si no hay relación directa.
      */
-    public function obtenerPorUsuarioId($usuarioId)
+    public function obtenerPorUsuarioId($usuarioId, $email = null, $emailRequireMatch = false)
     {
-        $sql = "SELECT a.*, f.CODIGO_FICHA, p.NOMBRE as programa_nombre, p.NIVEL_FORMACION,
-                       c.NOMBRE as centro_nombre, r.NOMBRE as regional_nombre
+        $baseSql = "SELECT a.*, f.CODIGO_FICHA, f.FECHA_INICIO, f.FECHA_FIN, f.ESTADO AS ficha_estado,
+                       c.NOMBRE as centro_nombre, r.NOMBRE as regional_nombre,
+                       r.CIUDAD as regional_ciudad, p.NOMBRE as programa_nombre, p.NIVEL_FORMACION,
+                       CONCAT(gestor.NOMBRES, ' ', gestor.APELLIDOS) AS gestor_nombre,
+                       gestor.EMAIL AS gestor_email
                 FROM aprendiz a
                 LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
                 LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
                 LEFT JOIN centro c ON f.CENTRO_ID = c.CENTRO_ID
                 LEFT JOIN regional r ON c.REGIONAL_ID = r.REGIONAL_ID
-                WHERE a.usuario_id = :usuarioId";
-        $stmt = $this->ejecutarPreparado($sql, [':usuarioId' => $usuarioId]);
-        return $stmt ? $stmt->fetch() : null;
+                LEFT JOIN instructor gestor ON f.FICHA_ID = gestor.GESTOR_FICHA_ID";
+
+        if ($usuarioId > 0 && !empty($email)) {
+            $sql = $baseSql . " WHERE a.usuario_id = :usuarioId AND a.EMAIL = :email LIMIT 1";
+            $stmt = $this->ejecutarPreparado($sql, [':usuarioId' => $usuarioId, ':email' => $email]);
+            if ($stmt) {
+                $aprendiz = $stmt->fetch();
+                if ($aprendiz) {
+                    return $aprendiz;
+                }
+            }
+            if ($emailRequireMatch) {
+                return null;
+            }
+        }
+
+        if ($usuarioId > 0) {
+            $sql = $baseSql . " WHERE a.usuario_id = :usuarioId LIMIT 1";
+            $stmt = $this->ejecutarPreparado($sql, [':usuarioId' => $usuarioId]);
+            if ($stmt) {
+                $aprendiz = $stmt->fetch();
+                if ($aprendiz) {
+                    return $aprendiz;
+                }
+            }
+        }
+
+        if (!empty($email)) {
+            $sql = $baseSql . " WHERE a.EMAIL = :email LIMIT 1";
+            $stmt = $this->ejecutarPreparado($sql, [':email' => $email]);
+            return $stmt ? $stmt->fetch() : null;
+        }
+
+        return null;
     }
 
     /**
@@ -674,21 +819,11 @@ class AprendizDAO extends BaseDatos
     /**
      * Guarda la justificación de una falta
      */
-    public function guardarJustificacion($asistenciaId, $aprendizId, $textoJustificacion)
+    public function guardarJustificacion($asistenciaId, $aprendizId, $textoJustificacion, $archivoRuta = null)
     {
-        $sql = "UPDATE asistencia 
-                SET EXCUSA_PRESENTADA = 1,
-                    JUSTIFICACION_TEXTO = :texto,
-                    ESTADO = 'excusa'
-                WHERE ASISTENCIA_ID = :asistencia_id 
-                AND ESTUDIANTE_ID = :aprendiz_id
-                AND EXCUSA_PRESENTADA = 0";
-        $stmt = $this->ejecutarPreparado($sql, [
-            ':texto' => $textoJustificacion,
-            ':asistencia_id' => $asistenciaId,
-            ':aprendiz_id' => $aprendizId
-        ]);
-        return $stmt && $stmt->rowCount() > 0;
+        require_once __DIR__ . '/JustificacionDAO.php';
+        $justDao = new JustificacionDAO();
+        return $justDao->guardarJustificacion($asistenciaId, $aprendizId, $textoJustificacion, $archivoRuta);
     }
 
     /**
@@ -722,6 +857,71 @@ class AprendizDAO extends BaseDatos
             ':dias' => $dias
         ]);
         return $stmt ? $stmt->fetchAll() : [];
+    }
+
+        /**
+     * Obtiene aprendices cuyas fichas están en la lista de IDs
+     * @param array $fichasIds
+     * @param int $inicio
+     * @param int $cantidad
+     * @param bool $filtroFichas (si es true, solo los que tienen ficha asignada)
+     * @return array
+     */
+    public function obtenerAprendicesPorFichas($fichasIds, $inicio = 0, $cantidad = 10, $filtroFichas = false)
+    {
+        if (empty($fichasIds)) return [];
+        $placeholders = implode(',', array_fill(0, count($fichasIds), '?'));
+        $sql = "SELECT 
+                    a.APRENDIZ_ID,
+                    a.TIPO_DOCUMENTO,
+                    a.NUMERO_DOCUMENTO,
+                    a.NOMBRES,
+                    a.APELLIDOS,
+                    a.FECHA_NACIMIENTO,
+                    a.GENERO,
+                    a.TELEFONO,
+                    a.EMAIL,
+                    a.ESTADO_ACADEMICO,
+                    a.FECHA_REGISTRO,
+                    f.CODIGO_FICHA,
+                    f.FICHA_ID,
+                    p.NOMBRE AS PROGRAMA_NOMBRE,
+                    pe.NIVEL_RIESGO_GLOBAL,
+                    pe.PROMEDIO_GENERAL,
+                    pe.PORCENTAJE_ASISTENCIA,
+                    pe.COMPETENCIAS_APROBADAS,
+                    pe.COMPETENCIAS_PENDIENTES
+                FROM aprendiz a
+                LEFT JOIN ficha f ON a.FICHA_ID = f.FICHA_ID
+                LEFT JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
+                LEFT JOIN progreso_estudiante pe ON a.APRENDIZ_ID = pe.ESTUDIANTE_ID
+                WHERE a.FICHA_ID IN ($placeholders)";
+        if ($filtroFichas) {
+            $sql .= " AND a.FICHA_ID IS NOT NULL";
+        }
+        $sql .= " ORDER BY a.APELLIDOS, a.NOMBRES LIMIT $inicio, $cantidad";
+        $stmt = $this->ejecutarPreparado($sql, $fichasIds);
+        return $stmt ? $stmt->fetchAll() : [];
+    }
+
+    /**
+     * Cuenta aprendices cuyas fichas están en la lista de IDs
+     * @param array $fichasIds
+     * @param bool $filtroFichas
+     * @return int
+     */
+    public function contarAprendicesPorFichas($fichasIds, $filtroFichas = false)
+    {
+        if (empty($fichasIds)) return 0;
+        $placeholders = implode(',', array_fill(0, count($fichasIds), '?'));
+        $sql = "SELECT COUNT(*) as total FROM aprendiz WHERE FICHA_ID IN ($placeholders)";
+        if ($filtroFichas) {
+            $sql .= " AND FICHA_ID IS NOT NULL";
+        }
+        $stmt = $this->ejecutarPreparado($sql, $fichasIds);
+        if (!$stmt) return 0;
+        $row = $stmt->fetch();
+        return (int)($row['total'] ?? 0);
     }
 }
 ?>

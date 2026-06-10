@@ -48,9 +48,6 @@ $iniciales = substr($instructor['NOMBRES'], 0, 1) . substr($instructor['APELLIDO
             <a href="instructores.php" class="btn-volver-detalle">
                 <i class="fas fa-arrow-left"></i> Volver a la lista
             </a>
-            <a href="gestionar_horario.php?ficha_id=<?= $ficha['FICHA_ID'] ?>" class="btn-action">
-    <i class="fas fa-calendar-alt"></i> Horario
-</a>
             <?php if (esAdmin()): ?>
             <div style="display: flex; gap: 10px;">
                 <a href="crud/editar_instructor.php?id=<?= $id ?>" class="btn-create">

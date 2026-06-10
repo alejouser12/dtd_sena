@@ -1,8 +1,5 @@
 <?php
 // mod/gestionar_horario.php
-// - Gestor de la ficha: puede agregar y eliminar bloques
-// - Instructor de la ficha (no gestor): solo puede VER
-// - Admin: puede todo
 session_start();
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/app.php';
@@ -11,8 +8,10 @@ require_once __DIR__ . '/../conexion/conexion.php';
 if (!esAdmin() && !esInstructor()) redirect_to('login.php');
 
 class HorarioMgr extends BaseDatos {
-    protected function consultar(){}protected function insertar(){}
-    protected function actualizar(){}protected function eliminar(){}
+    protected function consultar(){}
+    protected function insertar(){}
+    protected function actualizar(){}
+    protected function eliminar(){}
     public function uno($sql,$p=[]){ $s=$this->ejecutarPreparado($sql,$p); return $s?$s->fetch(PDO::FETCH_ASSOC):[]; }
     public function varios($sql,$p=[]){ $s=$this->ejecutarPreparado($sql,$p); return $s?$s->fetchAll(PDO::FETCH_ASSOC):[]; }
     public function exec($sql,$p=[]){ return $this->ejecutarPreparado($sql,$p); }
@@ -84,14 +83,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $esMiGestor) {
         $tri   = trim($_POST['trimestre']);
         $desde = $_POST['fecha_desde'];
         $hasta = $_POST['fecha_hasta'];
-        $iid   = esAdmin() ? (int)($_POST['instructor_id'] ?? $ref) : $ref;
+        $instructorId = (int)($_POST['instructor_id'] ?? $ref);
+        if ($instructorId <= 0) $instructorId = $ref;
 
         if ($mat && $hi && $hf && $dia && $tri && $desde && $hasta) {
             $db->exec(
                 "INSERT INTO horario (FICHA_ID,INSTRUCTOR_ID,DIA_SEMANA,HORA_INICIO,HORA_FIN,
                   MATERIA,AULA,TRIMESTRE,FECHA_DESDE,FECHA_HASTA)
                  VALUES (:fid,:iid,:dia,:hi,:hf,:mat,:aula,:tri,:desde,:hasta)",
-                [':fid'=>$fid,':iid'=>$iid,':dia'=>$dia,':hi'=>$hi,':hf'=>$hf,
+                [':fid'=>$fid,':iid'=>$instructorId,':dia'=>$dia,':hi'=>$hi,':hf'=>$hf,
                  ':mat'=>$mat,':aula'=>$aula,':tri'=>$tri,':desde'=>$desde,':hasta'=>$hasta]
             );
             $msg='✓ Bloque agregado.'; $fichaId=$fid; $trimestre=$tri;
@@ -106,8 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $esMiGestor) {
 
 // Cargar horario actual
 $horario = $fichaId ? $db->varios(
-    "SELECT h.*, i.NOMBRES AS inst_n, i.APELLIDOS AS inst_a
-     FROM horario h LEFT JOIN instructor i ON h.INSTRUCTOR_ID=i.INSTRUCTOR_ID
+    "SELECT h.*, i.NOMBRES AS inst_n, i.APELLIDOS AS inst_a, i.INSTRUCTOR_ID AS inst_id
+     FROM horario h 
+     LEFT JOIN instructor i ON h.INSTRUCTOR_ID = i.INSTRUCTOR_ID
      WHERE h.FICHA_ID=:fid AND h.TRIMESTRE=:tri
      ORDER BY h.DIA_SEMANA, h.HORA_INICIO",
     [':fid'=>$fichaId,':tri'=>$trimestre]
@@ -115,9 +116,22 @@ $horario = $fichaId ? $db->varios(
 
 $fichaInfo = $fichaId ? (array_values(array_filter($fichas, fn($f) => $f['FICHA_ID']==$fichaId))[0] ?? []) : [];
 
-$instructoresList = esAdmin() ? $db->varios(
-    "SELECT INSTRUCTOR_ID, NOMBRES, APELLIDOS FROM instructor ORDER BY NOMBRES"
-) : [];
+// Lista de instructores para el selector
+if (esAdmin()) {
+    $instructoresList = $db->varios(
+        "SELECT INSTRUCTOR_ID, NOMBRES, APELLIDOS FROM instructor ORDER BY NOMBRES"
+    );
+} else {
+    $instructoresList = $db->varios(
+        "SELECT i.INSTRUCTOR_ID, i.NOMBRES, i.APELLIDOS
+         FROM instructor i
+         JOIN instructor_ficha ifi ON i.INSTRUCTOR_ID = ifi.INSTRUCTOR_ID
+         WHERE ifi.FICHA_ID = :fid
+         UNION
+         SELECT INSTRUCTOR_ID, NOMBRES, APELLIDOS FROM instructor WHERE GESTOR_FICHA_ID = :fid2",
+        [':fid' => $fichaId, ':fid2' => $fichaId]
+    );
+}
 
 $dias = [1=>'Lunes',2=>'Martes',3=>'Miércoles',4=>'Jueves',5=>'Viernes',6=>'Sábado'];
 $trimestres = [];
@@ -135,7 +149,7 @@ for ($y=date('Y')-1;$y<=date('Y')+2;$y++){
 <style>
 .form-card{background:var(--color-blanco);border:1px solid var(--border-color);border-radius:18px;padding:24px;box-shadow:var(--shadow-card);margin-bottom:22px;}
 .s-title{font-size:13px;font-weight:800;color:var(--color-verde-1);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid rgba(57,169,0,.15);display:flex;align-items:center;gap:8px;}
-.f-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
+.f-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
 .fg{display:flex;flex-direction:column;gap:4px;}
 .fg label{font-size:10px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;letter-spacing:.4px;}
 .fg input,.fg select{padding:8px 11px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;background:var(--color-blanco);color:var(--color-texto);}
@@ -148,6 +162,14 @@ for ($y=date('Y')-1;$y<=date('Y')+2;$y++){
 .msg-ok{background:rgba(57,169,0,.1);border:1px solid rgba(57,169,0,.3);color:#1a5c00;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-weight:600;font-size:13px;}
 .msg-err{background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);color:#991b1b;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-weight:600;font-size:13px;}
 .readonly-notice{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);color:#1e40af;padding:12px 16px;border-radius:10px;margin-bottom:20px;font-size:13px;display:flex;align-items:center;gap:10px;}
+/* Estilos para el buscador de instructores */
+.instructor-search-wrapper{position:relative;width:100%;}
+.instructor-search-wrapper input{width:100%;padding:8px 11px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;background:var(--color-blanco);color:var(--color-texto);}
+.instructor-search-wrapper input:focus{outline:none;border-color:var(--color-verde-1);}
+.instructor-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--color-blanco);border:1px solid var(--border-color);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:100;display:none;box-shadow:var(--shadow-card);}
+.instructor-dropdown .instructor-option{padding:8px 11px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border-color);}
+.instructor-dropdown .instructor-option:hover{background:var(--color-verde-3);color:var(--color-verde-1);}
+.instructor-dropdown .instructor-option.selected{background:var(--color-verde-1);color:white;}
 </style>
 </head>
 <body>
@@ -184,9 +206,7 @@ for ($y=date('Y')-1;$y<=date('Y')+2;$y++){
 <div style="margin-bottom:18px;">
     <p style="font-size:11px;font-weight:700;color:var(--color-texto-secundario);margin-bottom:6px;text-transform:uppercase;">FICHA</p>
     <?php foreach ($fichas as $f): ?>
-    <?php
-        $esGestorEstaFicha = esAdmin() || ($ref > 0 && !empty($f['gestor_id']) && $f['gestor_id'] == $ref);
-    ?>
+    <?php $esGestorEstaFicha = esAdmin() || ($ref > 0 && !empty($f['gestor_id']) && $f['gestor_id'] == $ref); ?>
     <a href="?ficha=<?= $f['FICHA_ID'] ?>&trimestre=<?= urlencode($trimestre) ?>"
        class="ficha-tab <?= $f['FICHA_ID']==$fichaId?'active':'' ?>">
         <i class="fas fa-layer-group"></i>
@@ -235,7 +255,7 @@ for ($y=date('Y')-1;$y<=date('Y')+2;$y++){
 <?php if ($esMiGestor): ?>
 <div class="form-card">
     <div class="s-title"><i class="fas fa-plus-circle"></i> Agregar Bloque al Trimestre <?= htmlspecialchars($trimestre) ?></div>
-    <form method="POST">
+    <form method="POST" id="formHorario">
         <input type="hidden" name="accion" value="crear">
         <input type="hidden" name="ficha_id" value="<?= $fichaId ?>">
         <div class="f-row" style="margin-bottom:14px;">
@@ -255,23 +275,91 @@ for ($y=date('Y')-1;$y<=date('Y')+2;$y++){
             </div>
             <div class="fg"><label>Desde *</label><input type="date" name="fecha_desde" required></div>
             <div class="fg"><label>Hasta *</label><input type="date" name="fecha_hasta" required></div>
-            <?php if (esAdmin() && !empty($instructoresList)): ?>
-            <div class="fg"><label>Instructor</label>
-                <select name="instructor_id">
-                    <option value="0">— Sin asignar —</option>
-                    <?php foreach($instructoresList as $ins): ?>
-                    <option value="<?=$ins['INSTRUCTOR_ID']?>"><?=htmlspecialchars($ins['NOMBRES'].' '.$ins['APELLIDOS'])?></option>
-                    <?php endforeach; ?>
-                </select>
+            <!-- Instructor asignado con buscador -->
+            <div class="fg">
+                <label>Instructor que dicta *</label>
+                <div class="instructor-search-wrapper">
+                    <input type="text" id="instructorSearch" placeholder="Buscar instructor por nombre..." autocomplete="off">
+                    <input type="hidden" name="instructor_id" id="instructorId" required>
+                    <div id="instructorDropdown" class="instructor-dropdown"></div>
+                </div>
+                <small style="font-size:10px;color:var(--color-texto-secundario);">Escribe el nombre del instructor para buscarlo</small>
             </div>
-            <?php endif; ?>
         </div>
         <button type="submit" class="btn-action"><i class="fas fa-plus"></i> Agregar bloque</button>
     </form>
 </div>
+
+<script>
+// Datos de instructores desde PHP
+const instructores = <?php 
+    $lista = [];
+    foreach ($instructoresList as $ins) {
+        $lista[] = [
+            'id' => $ins['INSTRUCTOR_ID'],
+            'nombre' => $ins['NOMBRES'] . ' ' . $ins['APELLIDOS']
+        ];
+    }
+    echo json_encode($lista);
+?>;
+
+const searchInput = document.getElementById('instructorSearch');
+const instructorIdInput = document.getElementById('instructorId');
+const dropdown = document.getElementById('instructorDropdown');
+
+function renderDropdown(filterText = '') {
+    const filtered = instructores.filter(inst => 
+        inst.nombre.toLowerCase().includes(filterText.toLowerCase())
+    );
+    
+    if (filtered.length === 0) {
+        dropdown.innerHTML = '<div class="instructor-option" style="color:var(--color-texto-secundario);">No se encontraron instructores</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+    
+    dropdown.innerHTML = '';
+    filtered.forEach(inst => {
+        const option = document.createElement('div');
+        option.className = 'instructor-option';
+        option.textContent = inst.nombre;
+        option.dataset.id = inst.id;
+        option.dataset.nombre = inst.nombre;
+        option.onclick = () => {
+            searchInput.value = inst.nombre;
+            instructorIdInput.value = inst.id;
+            dropdown.style.display = 'none';
+        };
+        dropdown.appendChild(option);
+    });
+    dropdown.style.display = 'block';
+}
+
+searchInput.addEventListener('input', (e) => {
+    renderDropdown(e.target.value);
+});
+
+searchInput.addEventListener('focus', () => {
+    renderDropdown(searchInput.value);
+});
+
+document.addEventListener('click', (e) => {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+// Validar que se haya seleccionado un instructor antes de enviar
+document.getElementById('formHorario').addEventListener('submit', (e) => {
+    if (!instructorIdInput.value) {
+        e.preventDefault();
+        alert('Por favor selecciona un instructor de la lista');
+    }
+});
+</script>
 <?php endif; ?>
 
-<!-- Tabla horario (todos pueden ver) -->
+<!-- Tabla horario -->
 <?php if (!empty($horario)): ?>
 <div class="form-card">
     <div class="s-title">
@@ -282,9 +370,11 @@ for ($y=date('Y')-1;$y<=date('Y')+2;$y++){
     <div style="overflow-x:auto;">
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead><tr>
-            <?php foreach(['Día','Horario','Materia','Aula','Instructor'] as $th): ?>
-            <th style="background:var(--color-gris-fondo);padding:9px 12px;text-align:left;border-bottom:2px solid var(--border-color);font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;"><?=$th?></th>
-            <?php endforeach; ?>
+            <th style="background:var(--color-gris-fondo);padding:9px 12px;text-align:left;border-bottom:2px solid var(--border-color);font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;">Día</th>
+            <th style="background:var(--color-gris-fondo);padding:9px 12px;text-align:left;border-bottom:2px solid var(--border-color);font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;">Horario</th>
+            <th style="background:var(--color-gris-fondo);padding:9px 12px;text-align:left;border-bottom:2px solid var(--border-color);font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;">Materia</th>
+            <th style="background:var(--color-gris-fondo);padding:9px 12px;text-align:left;border-bottom:2px solid var(--border-color);font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;">Aula</th>
+            <th style="background:var(--color-gris-fondo);padding:9px 12px;text-align:left;border-bottom:2px solid var(--border-color);font-size:11px;font-weight:700;color:var(--color-texto-secundario);text-transform:uppercase;">Instructor</th>
             <?php if ($esMiGestor): ?><th style="background:var(--color-gris-fondo);border-bottom:2px solid var(--border-color);width:50px;"></th><?php endif; ?>
         </tr></thead>
         <tbody>
@@ -294,10 +384,16 @@ for ($y=date('Y')-1;$y<=date('Y')+2;$y++){
             <td style="padding:10px 12px;border-bottom:1px solid var(--border-color);font-size:12px;white-space:nowrap;"><?=substr($h['HORA_INICIO'],0,5)?> – <?=substr($h['HORA_FIN'],0,5)?></td>
             <td style="padding:10px 12px;border-bottom:1px solid var(--border-color);font-weight:600;"><?=htmlspecialchars($h['MATERIA'])?></td>
             <td style="padding:10px 12px;border-bottom:1px solid var(--border-color);color:var(--color-texto-secundario);"><?=htmlspecialchars($h['AULA']??'—')?></td>
-            <td style="padding:10px 12px;border-bottom:1px solid var(--border-color);font-size:12px;"><?=htmlspecialchars(trim(($h['inst_n']??'').' '.($h['inst_a']??'')))?:' —'?></td>
+            <td style="padding:10px 12px;border-bottom:1px solid var(--border-color);font-size:12px;">
+                <?php if ($h['inst_id']): ?>
+                    <span style="display:inline-flex;align-items:center;gap:4px;"><i class="fas fa-chalkboard-teacher" style="color:var(--color-verde-1);"></i> <?=htmlspecialchars(trim($h['inst_n'].' '.$h['inst_a']))?></span>
+                <?php else: ?>
+                    <span style="color:var(--color-texto-secundario);">— Sin asignar —</span>
+                <?php endif; ?>
+            </td>
             <?php if ($esMiGestor): ?>
             <td style="padding:10px 12px;border-bottom:1px solid var(--border-color);text-align:center;">
-                <form method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar?')">
+                <form method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar este bloque?')">
                     <input type="hidden" name="accion" value="eliminar">
                     <input type="hidden" name="horario_id" value="<?=$h['HORARIO_ID']?>">
                     <button type="submit" style="background:rgba(220,38,38,.1);color:#dc2626;border:1px solid rgba(220,38,38,.25);padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;"><i class="fas fa-trash"></i></button>

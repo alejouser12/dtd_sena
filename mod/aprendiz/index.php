@@ -15,12 +15,9 @@ $aprendizDAO   = new AprendizDAO();
 $asistenciaDAO = new AsistenciaDAO();
 
 $aprendizId = (int)($_SESSION['usuario_ref_id'] ?? 0);
-$aprendiz   = $aprendizId ? $aprendizDAO->obtenerPorId($aprendizId) : null;
-
-if (!$aprendiz) {
-    $usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
-    $aprendiz  = $usuarioId ? $aprendizDAO->obtenerPorUsuarioId($usuarioId) : null;
-}
+$usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
+$usuarioEmail = $_SESSION['usuario_email'] ?? '';
+$aprendiz = $aprendizDAO->obtenerPorSesion($aprendizId, $usuarioId, $usuarioEmail);
 
 $resumen  = $aprendiz ? $asistenciaDAO->obtenerResumenAprendiz($aprendiz['APRENDIZ_ID']) : [];
 $pct      = ($resumen['total_dias'] ?? 0) > 0
@@ -138,19 +135,22 @@ $nombre = $aprendiz
         <i class="fas fa-bolt" style="color:var(--color-verde-1);"></i> Accesos Rápidos
     </h2>
     <div class="quick-links">
-        <a href="<?= htmlspecialchars(app_url('mod/perfil.php')) ?>" class="quick-btn">
-            <i class="fas fa-user-circle" style="color:var(--color-verde-1);"></i> Mi Perfil
-        </a>
-        <a href="<?= htmlspecialchars(app_url('mod/aprendiz/horario.php')) ?>" class="quick-btn">
-            <i class="fas fa-calendar-week" style="color:#8b5cf6;"></i> Mi Horario
-        </a>
-        <a href="<?= htmlspecialchars(app_url('mod/aprendiz/asistencia.php')) ?>" class="quick-btn">
-            <i class="fas fa-calendar-check" style="color:#3b82f6;"></i> Asistencias
-        </a>
-        <a href="<?= htmlspecialchars(app_url('mod/aprendiz/evidencias.php')) ?>" class="quick-btn">
-            <i class="fas fa-file-alt" style="color:#f59e0b;"></i> Evidencias
-        </a>
-    </div>
+    <a href="<?= htmlspecialchars(app_url('mod/aprendiz_perfil.php')) ?>" class="quick-btn">
+        <i class="fas fa-user-circle" style="color:var(--color-verde-1);"></i> Mi Perfil
+    </a>
+    <a href="<?= htmlspecialchars(app_url('mod/aprendiz/horario.php')) ?>" class="quick-btn">
+        <i class="fas fa-calendar-week" style="color:#8b5cf6;"></i> Mi Horario
+    </a>
+    <a href="<?= htmlspecialchars(app_url('mod/aprendiz/asistencia.php')) ?>" class="quick-btn">
+        <i class="fas fa-calendar-check" style="color:#3b82f6;"></i> Asistencias
+    </a>
+    <a href="<?= htmlspecialchars(app_url('mod/aprendiz/evidencias.php')) ?>" class="quick-btn">
+        <i class="fas fa-file-alt" style="color:#f59e0b;"></i> Evidencias
+    </a>
+    <a href="<?= htmlspecialchars(app_url('mod/aprendiz_faltas.php')) ?>" class="quick-btn">
+        <i class="fas fa-calendar-times" style="color:#dc2626;"></i> Mis faltas
+    </a>
+</div>
 
 </main>
 

@@ -9,16 +9,18 @@ $aprendizDAO = new AprendizDAO();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
+// Si no hay ID válido, mostrar mensaje de error y detener ejecución
 if ($id <= 0) {
-    header('Location: programas.php');
-    exit;
+    error_log("ficha_detalle.php: ID de ficha no recibido o inválido. GET: " . print_r($_GET, true));
+    die("<h1>Error</h1><p>No se recibió un identificador de ficha válido. <a href='programas.php'>Volver a programas</a></p>");
 }
 
 $ficha = $fichaDAO->obtenerPorId($id);
 
+// Si la ficha no existe, mostrar mensaje de error con enlace para volver
 if (!$ficha) {
-    header('Location: programas.php');
-    exit;
+    error_log("ficha_detalle.php: No se encontró la ficha con ID $id");
+    die("<h1>Error</h1><p>La ficha solicitada no existe en la base de datos. <a href='programas.php'>Volver a programas</a></p>");
 }
 
 $aprendices = $fichaDAO->obtenerAprendices($id);
@@ -64,7 +66,8 @@ $aprendices = $fichaDAO->obtenerAprendices($id);
             <div class="ficha-codigo">Ficha <?php echo $ficha['CODIGO_FICHA']; ?></div>
             <div class="ficha-programa">
                 <i class="fas fa-book"></i>
-                <?php echo $ficha['programa_nombre']; ?> - <?php echo $ficha['NIVEL_FORMACION']; ?>
+                <?php echo $ficha['programa_nombre'] ?? 'Programa no disponible'; ?> 
+                <?php if(!empty($ficha['NIVEL_FORMACION'])) echo '- ' . $ficha['NIVEL_FORMACION']; ?>
             </div>
             
             <div class="ficha-info-grid">
@@ -109,7 +112,7 @@ $aprendices = $fichaDAO->obtenerAprendices($id);
                 <?php endif; ?>
             </div>
 
-            <!-- INFORMACIÓN DE UBICACIÓN (CENTRO Y REGIONAL) -->
+            <!-- Información de ubicación -->
             <?php if(!empty($ficha['centro_nombre'])): ?>
             <div style="margin-top: 20px; padding: 15px 20px; background: rgba(255,255,255,0.1); border-radius: 12px; backdrop-filter: blur(5px);">
                 <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
@@ -171,12 +174,10 @@ $aprendices = $fichaDAO->obtenerAprendices($id);
                         <?php foreach($aprendices as $ap): 
                             $riesgoClass = '';
                             $riesgoTexto = $ap['NIVEL_RIESGO_GLOBAL'] ?? 'N/A';
-                            
                             if($riesgoTexto == 'Bajo') $riesgoClass = 'bajo';
                             elseif($riesgoTexto == 'Medio') $riesgoClass = 'medio';
                             elseif($riesgoTexto == 'Alto') $riesgoClass = 'alto';
                             else $riesgoClass = 'na';
-                            
                             $estadoClass = $ap['ESTADO_ACADEMICO'] == 'Activo' ? 'success' : 'danger';
                         ?>
                         <tr>
@@ -186,21 +187,9 @@ $aprendices = $fichaDAO->obtenerAprendices($id);
                             <td><?php echo $ap['TELEFONO']; ?></td>
                             <td><?php echo number_format($ap['PROMEDIO_GENERAL'] ?? 0, 1); ?></td>
                             <td><?php echo number_format($ap['PORCENTAJE_ASISTENCIA'] ?? 0, 1); ?>%</td>
-                            <td>
-                                <span class="badge badge-<?php echo $estadoClass; ?>">
-                                    <?php echo $ap['ESTADO_ACADEMICO']; ?>
-                                </span>
-                            </td>
-                            <td>
-                                <span class="riesgo-<?php echo $riesgoClass; ?>">
-                                    <?php echo $riesgoTexto; ?>
-                                </span>
-                            </td>
-                            <td>
-                                <a href="aprendiz_detalle.php?id=<?php echo $ap['APRENDIZ_ID']; ?>" class="btn-ver-aprendiz">
-                                    <i class="fas fa-eye"></i> Ver
-                                </a>
-                            </td>
+                            <td><span class="badge badge-<?php echo $estadoClass; ?>"><?php echo $ap['ESTADO_ACADEMICO']; ?></span></td>
+                            <td><span class="riesgo-<?php echo $riesgoClass; ?>"><?php echo $riesgoTexto; ?></span></td>
+                            <td><a href="aprendiz_detalle.php?id=<?php echo $ap['APRENDIZ_ID']; ?>" class="btn-ver-aprendiz"><i class="fas fa-eye"></i> Ver</a></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>

@@ -19,8 +19,21 @@ if (!$ficha) { header('Location: asistencias.php'); exit; }
 
 // Instructor sólo ve sus fichas
 if (esInstructor()) {
-    $instId  = (int)($_SESSION['usuario_ref_id'] ?? 0);
-    $misF    = $instDAO->obtenerFichas($instId);
+    $instId = (int)($_GET['instructor_id'] ?? 0);
+    if ($instId <= 0) {
+        $instId = (int)($_SESSION['usuario_ref_id'] ?? 0);
+    }
+    if ($instId <= 0) {
+        $email = $_SESSION['usuario_email'] ?? '';
+        if (!empty($email)) {
+            $c = $instDAO->buscarPorColumna('EMAIL', $email);
+            if (!empty($c) && isset($c[0]['INSTRUCTOR_ID'])) {
+                $instId = (int)$c[0]['INSTRUCTOR_ID'];
+            }
+        }
+    }
+
+    $misF = $instDAO->obtenerFichas($instId);
     $misFIds = array_column($misF, 'FICHA_ID');
     if (!in_array($id, $misFIds)) { header('Location: asistencias.php'); exit; }
 }

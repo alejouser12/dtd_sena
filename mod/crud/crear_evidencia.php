@@ -1,12 +1,43 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/auth.php';
-if (!esAdmin()) {
+// Instructores y administradores pueden crear evidencias
+if (!esAdmin() && !esInstructor()) {
     header('Location: ../evidencias.php');
     exit;
 }
 require_once __DIR__ . '/../../conexion/FichaDAO.php';
-$fichas = (new FichaDAO())->obtenerTodas();
+require_once __DIR__ . '/../../conexion/instructorDAO.php';
+
+$fichaDAO = new FichaDAO();
+$instDAO = new InstructorDAO();
+
+// Si es instructor, solo mostrar sus fichas asignadas
+if (esInstructor()) {
+    $instructorId = (int)($_SESSION['usuario_ref_id'] ?? 0);
+    if ($instructorId <= 0) {
+        $email = $_SESSION['usuario_email'] ?? '';
+        if (!empty($email)) {
+            $c = $instDAO->buscarPorColumna('EMAIL', $email);
+            if (!empty($c) && isset($c[0]['INSTRUCTOR_ID'])) {
+                $instructorId = (int)$c[0]['INSTRUCTOR_ID'];
+            }
+        }
+    }
+    
+    if ($instructorId > 0) {
+        $fichasIds = $instDAO->obtenerFichasIds($instructorId);
+        $fichas = [];
+        if (!empty($fichasIds)) {
+            $fichas = $fichaDAO->obtenerPorIds($fichasIds);
+        }
+    } else {
+        $fichas = [];
+    }
+} else {
+    // Admin ve todas las fichas
+    $fichas = $fichaDAO->obtenerTodas();
+}
 
 $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
 ?>
@@ -99,8 +130,8 @@ $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
                             <input type="date" name="fecha_evidencia" class="form-control" required value="<?= date('Y-m-d') ?>">
                         </div>
                         <div class="form-group">
-                            <label><i class="fas fa-hourglass-half"></i> Tiempo de entrega</label>
-                            <input type="text" name="tiempo_entrega" class="form-control" placeholder="Ej: 7 días, 2025-12-31">
+                            <label><i class="fas fa-hourglass-half"></i> Fecha de entrega *</label>
+                            <input type="date" name="tiempo_entrega" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-layer-group"></i> Ficha *</label>
@@ -131,16 +162,37 @@ $tipos = ['Taller', 'Examen', 'Proyecto', 'Tarea', 'Foro', 'Otro'];
     <script>
         document.getElementById('form-evidencia').addEventListener('submit', function(e) {
             e.preventDefault();
-            // Validación adicional
+            
             const nombre = this.querySelector('[name="nombre"]').value.trim();
             const tipo = this.querySelector('[name="tipo_evidencia"]').value;
             const ficha = this.querySelector('[name="ficha_id"]').value;
+            const fechaAsignacion = this.querySelector('[name="fecha_evidencia"]').value;
+            const fechaEntrega = this.querySelector('[name="tiempo_entrega"]').value;
+            
             if (!nombre || !tipo || !ficha) {
                 Swal.fire({ icon: 'error', title: 'Error', text: 'Complete los campos obligatorios (*)' });
                 return;
             }
+            
+            if (!fechaAsignacion) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Seleccione la fecha de asignación' });
+                return;
+            }
+            
+            if (!fechaEntrega) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Seleccione la fecha de entrega' });
+                return;
+            }
+            
+            // Validar que fecha de entrega no sea menor a fecha de asignación
+            if (new Date(fechaEntrega) < new Date(fechaAsignacion)) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'La fecha de entrega no puede ser menor a la fecha de asignación' });
+                return;
+            }
+            
             this.submit();
         });
+        
         if (typeof initThemeToggle === 'function') setTimeout(initThemeToggle, 100);
     </script>
 </body>

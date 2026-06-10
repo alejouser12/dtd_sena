@@ -9,15 +9,11 @@ if (!esAprendiz()) {
 }
 
 $aprendizDAO = new AprendizDAO();
-$usuarioId = $_SESSION['usuario_id'] ?? 0;
+$aprendizId  = (int)($_SESSION['usuario_ref_id'] ?? 0);
+$usuarioId   = (int)($_SESSION['usuario_id'] ?? 0);
+$usuarioEmail = $_SESSION['usuario_email'] ?? '';
 
-$sql = "SELECT a.APRENDIZ_ID, a.NOMBRES, a.APELLIDOS
-        FROM aprendiz a
-        WHERE a.usuario_id = :usuario_id
-        LIMIT 1";
-$stmt = $aprendizDAO->ejecutarPreparado($sql, [':usuario_id' => $usuarioId]);
-$aprendiz = $stmt ? $stmt->fetch() : null;
-
+$aprendiz = $aprendizDAO->obtenerPorSesion($aprendizId, $usuarioId, $usuarioEmail);
 if (!$aprendiz) {
     redirect_to('index.php');
 }

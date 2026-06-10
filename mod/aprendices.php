@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . "/../conexion/AprendizDAO.php";
+require_once __DIR__ . "/../conexion/instructorDAO.php";
 
 $aprendizDAO = new AprendizDAO();
 
@@ -10,6 +11,7 @@ $registros_por_pagina = isset($_GET['registros']) ? (int)$_GET['registros'] : 10
 $columna = isset($_GET['columna']) ? $_GET['columna'] : '';
 $busqueda = isset($_GET['busqueda']) ? trim($_GET['busqueda']) : '';
 $filtro_fichas = isset($_GET['filtro_fichas']) ? $_GET['filtro_fichas'] == '1' : false;
+$instructor_id = isset($_GET['instructor_id']) ? (int)$_GET['instructor_id'] : 0;
 
 $registros_permitidos = [10, 50, 100];
 if (!in_array($registros_por_pagina, $registros_permitidos)) {
@@ -18,12 +20,37 @@ if (!in_array($registros_por_pagina, $registros_permitidos)) {
 
 $inicio = ($pagina - 1) * $registros_por_pagina;
 
+// Si es instructor y viene instructor_id, forzamos filtro por sus fichas
+// Resolver fichas del instructor cuando corresponda (GET > session > email)
+$fichasIds = [];
+if (esInstructor()) {
+    if ($instructor_id <= 0) {
+        $instructor_id = (int)($_SESSION['usuario_ref_id'] ?? 0);
+        if ($instructor_id <= 0) {
+            $instDAO_tmp = new InstructorDAO();
+            $email = $_SESSION['usuario_email'] ?? '';
+            if (!empty($email)) {
+                $c = $instDAO_tmp->buscarPorColumna('EMAIL', $email);
+                if (!empty($c) && isset($c[0]['INSTRUCTOR_ID'])) {
+                    $instructor_id = (int)$c[0]['INSTRUCTOR_ID'];
+                }
+            }
+        }
+    }
+
+    if ($instructor_id > 0) {
+        $instDAO = $instDAO ?? new InstructorDAO();
+        $fichasIds = $instDAO->obtenerFichasIds($instructor_id);
+    }
+}
+
+// Búsqueda o listado paginado aplicando filtro por fichas si existe
 if (!empty($columna) && !empty($busqueda)) {
-    $aprendices = $aprendizDAO->buscarPorColumnaPaginado($columna, $busqueda, $inicio, $registros_por_pagina);
-    $total_registros = $aprendizDAO->contarBusqueda($columna, $busqueda);
+    $aprendices = $aprendizDAO->buscarPorColumnaPaginado($columna, $busqueda, $inicio, $registros_por_pagina, $fichasIds);
+    $total_registros = $aprendizDAO->contarBusqueda($columna, $busqueda, $fichasIds);
 } else {
-    $aprendices = $aprendizDAO->obtenerAprendicesPaginados($inicio, $registros_por_pagina, $filtro_fichas);
-    $total_registros = $aprendizDAO->contarAprendices($filtro_fichas);
+    $aprendices = $aprendizDAO->obtenerAprendicesPaginados($inicio, $registros_por_pagina, $filtro_fichas, $fichasIds);
+    $total_registros = $aprendizDAO->contarAprendices($filtro_fichas, $fichasIds);
 }
 
 $total_paginas = ceil($total_registros / $registros_por_pagina);
@@ -32,10 +59,10 @@ $url_params = [];
 if (!empty($columna)) $url_params['columna'] = $columna;
 if (!empty($busqueda)) $url_params['busqueda'] = $busqueda;
 if ($filtro_fichas) $url_params['filtro_fichas'] = '1';
+if ($instructor_id) $url_params['instructor_id'] = $instructor_id;
 $url_params['registros'] = $registros_por_pagina;
 $url_base = 'aprendices.php?' . http_build_query($url_params);
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -46,7 +73,6 @@ $url_base = 'aprendices.php?' . http_build_query($url_params);
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        /* Estilos para los botones de acción */
         .action-buttons {
             display: flex;
             gap: 8px;
@@ -85,13 +111,79 @@ $url_base = 'aprendices.php?' . http_build_query($url_params);
             color: white;
             transform: translateY(-2px);
         }
-        /* Ajuste para el colspan cuando no hay acciones */
         .empty-state[colspan="10"] {
             text-align: center;
         }
         .empty-state[colspan="11"] {
             text-align: center;
         }
+body.dark-mode .data-table-aprendices td,
+body.dark-mode .data-table-aprendices th {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+body.dark-mode .data-table-aprendices tr:last-child td {
+    border-bottom: none;
+}
+body.dark-mode .action-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: nowrap;
+}
+body.dark-mode .action-buttons .btn-view-all {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+}
+body.dark-mode .action-buttons .btn-view-all:hover {
+    background: #2ecc71;
+    color: #1a1a2e;
+}
+body.dark-mode .action-buttons .btn-edit {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+body.dark-mode .action-buttons .btn-edit:hover {
+    background: #3b82f6;
+    color: white;
+}
+body.dark-mode .action-buttons .btn-delete {
+    background: rgba(220, 38, 38, 0.2);
+    color: #f87171;
+}
+body.dark-mode .action-buttons .btn-delete:hover {
+    background: #dc2626;
+    color: white;
+}
+body.dark-mode .estado-badge {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+}
+body.dark-mode .estado-badge.activo {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+}
+body.dark-mode .estado-badge.inactivo,
+body.dark-mode .estado-badge.retirado {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+body.dark-mode .ficha-code {
+    background: rgba(255, 255, 255, 0.08);
+    color: #a0a0a0;
+}
+body.dark-mode .data-table-aprendices {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+body.dark-mode .data-table-aprendices th {
+    border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+}
+body.dark-mode .empty-state {
+    color: #888;
+}
+body.dark-mode .empty-state i {
+    color: #555;
+}
     </style>
 </head>
 <body>
@@ -117,7 +209,7 @@ $url_base = 'aprendices.php?' . http_build_query($url_params);
             <i class="fas fa-search"></i> 
             Buscando en <strong><?= htmlspecialchars($columna) ?></strong>: "<?= htmlspecialchars($busqueda) ?>"
         </span>
-        <a href="aprendices.php" class="clear-filter">
+        <a href="aprendices.php<?= $instructor_id ? '?instructor_id='.$instructor_id : '' ?>" class="clear-filter">
             <i class="fas fa-times"></i> Limpiar filtro
         </a>
     </div>
@@ -209,12 +301,9 @@ $url_base = 'aprendices.php?' . http_build_query($url_params);
                             </span>
                         </td>
                         <td class="action-buttons">
-                            <!-- Botón de detalle (siempre visible) -->
                             <a href="aprendiz_detalle.php?id=<?= $a['APRENDIZ_ID'] ?>" class="btn-view-all" title="Ver detalles">
                                 <i class="fas fa-eye"></i>
                             </a>
-                            
-                            <!-- Botones de editar y eliminar (solo para admin) -->
                             <?php if (esAdmin()): ?>
                                 <a href="crud/editar_aprendiz.php?id=<?= $a['APRENDIZ_ID'] ?>" class="btn-edit" title="Editar aprendiz">
                                     <i class="fas fa-edit"></i>
@@ -389,7 +478,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.querySelectorAll('.filter-clear').forEach(btn => {
         btn.addEventListener('click', function() {
-            window.location.href = 'aprendices.php';
+            let url = new URL(window.location.href);
+            url.searchParams.delete('columna');
+            url.searchParams.delete('busqueda');
+            url.searchParams.set('pagina', '1');
+            window.location.href = url.toString();
         });
     });
     

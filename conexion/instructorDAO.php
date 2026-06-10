@@ -1,5 +1,5 @@
 <?php
-// conexion/instructorDAO.php — VERSION CORREGIDA
+// conexion/instructorDAO.php — VERSION COMPLETA CON SOPORTE PARA FICHAS
 require_once __DIR__ . "/conexion.php";
 
 class InstructorDAO extends BaseDatos
@@ -29,35 +29,44 @@ class InstructorDAO extends BaseDatos
 
     public function obtenerPorId($id)
     {
-        $sql  = "SELECT INSTRUCTOR_ID, NOMBRES, APELLIDOS, EMAIL, ESPECIALIDAD
+        $sql  = "SELECT INSTRUCTOR_ID, NOMBRES, APELLIDOS, EMAIL, ESPECIALIDAD, GESTOR_FICHA_ID
                  FROM instructor WHERE INSTRUCTOR_ID = :id";
         $stmt = $this->ejecutarPreparado($sql, [':id' => $id]);
         if (!$stmt) return null;
         $instructor = $stmt->fetch();
         if (!$instructor) return null;
 
-        // Total fichas
         $r = $this->ejecutarPreparado(
-            "SELECT COUNT(*) as total FROM instructor_ficha WHERE INSTRUCTOR_ID = :id",
+            "SELECT COUNT(*) as total
+             FROM (
+                 SELECT FICHA_ID FROM instructor_ficha WHERE INSTRUCTOR_ID = :id
+                 UNION
+                 SELECT GESTOR_FICHA_ID FROM instructor WHERE INSTRUCTOR_ID = :id AND GESTOR_FICHA_ID IS NOT NULL
+             ) AS fichas",
             [':id' => $id]);
         $instructor['total_fichas'] = $r ? (int)$r->fetch()['total'] : 0;
 
-        // Fichas activas
         $r = $this->ejecutarPreparado(
             "SELECT COUNT(*) as total
-             FROM instructor_ficha ifi
-             INNER JOIN ficha f ON ifi.FICHA_ID = f.FICHA_ID
-             WHERE ifi.INSTRUCTOR_ID = :id AND f.ESTADO = 'Activa'",
+             FROM (
+                 SELECT FICHA_ID FROM instructor_ficha WHERE INSTRUCTOR_ID = :id
+                 UNION
+                 SELECT GESTOR_FICHA_ID FROM instructor WHERE INSTRUCTOR_ID = :id AND GESTOR_FICHA_ID IS NOT NULL
+             ) AS fichas
+             INNER JOIN ficha f ON fichas.FICHA_ID = f.FICHA_ID
+             WHERE f.ESTADO = 'Activa'",
             [':id' => $id]);
         $instructor['fichas_activas'] = $r ? (int)$r->fetch()['total'] : 0;
 
-        // Total aprendices
         $r = $this->ejecutarPreparado(
             "SELECT COUNT(DISTINCT a.APRENDIZ_ID) as total
-             FROM instructor_ficha ifi
-             INNER JOIN ficha f ON ifi.FICHA_ID = f.FICHA_ID
-             INNER JOIN aprendiz a ON a.FICHA_ID = f.FICHA_ID
-             WHERE ifi.INSTRUCTOR_ID = :id",
+             FROM (
+                 SELECT FICHA_ID FROM instructor_ficha WHERE INSTRUCTOR_ID = :id
+                 UNION
+                 SELECT GESTOR_FICHA_ID FROM instructor WHERE INSTRUCTOR_ID = :id AND GESTOR_FICHA_ID IS NOT NULL
+             ) AS fichas
+             INNER JOIN ficha f ON fichas.FICHA_ID = f.FICHA_ID
+             INNER JOIN aprendiz a ON a.FICHA_ID = f.FICHA_ID",
             [':id' => $id]);
         $instructor['total_aprendices'] = $r ? (int)$r->fetch()['total'] : 0;
 
@@ -66,7 +75,6 @@ class InstructorDAO extends BaseDatos
 
     public function obtenerFichas($instructorId)
     {
-        // ⚠️ Usa instructor_ficha — NO ficha.INSTRUCTOR_ID (no existe)
         $sql  = "SELECT
                     f.FICHA_ID,
                     f.CODIGO_FICHA,
@@ -76,16 +84,18 @@ class InstructorDAO extends BaseDatos
                     p.NOMBRE  AS PROGRAMA_NOMBRE,
                     p.NIVEL_FORMACION,
                     (SELECT COUNT(*) FROM aprendiz a WHERE a.FICHA_ID = f.FICHA_ID) AS total_aprendices
-                 FROM instructor_ficha ifi
-                 INNER JOIN ficha     f ON ifi.FICHA_ID    = f.FICHA_ID
-                 INNER JOIN programa  p ON f.PROGRAMA_ID   = p.PROGRAMA_ID
-                 WHERE ifi.INSTRUCTOR_ID = :instructorId
+                 FROM ficha f
+                 INNER JOIN programa p ON f.PROGRAMA_ID = p.PROGRAMA_ID
+                 WHERE f.FICHA_ID IN (
+                     SELECT FICHA_ID FROM instructor_ficha WHERE INSTRUCTOR_ID = :instructorId
+                     UNION
+                     SELECT GESTOR_FICHA_ID FROM instructor WHERE INSTRUCTOR_ID = :instructorId AND GESTOR_FICHA_ID IS NOT NULL
+                 )
                  ORDER BY f.ESTADO, f.FECHA_INICIO DESC";
         $stmt = $this->ejecutarPreparado($sql, [':instructorId' => $instructorId]);
         return $stmt ? $stmt->fetchAll() : [];
     }
 
-    // obtenerProximasClases: la tabla horario no tiene FECHA, usa FECHA_DESDE/HASTA
     public function obtenerProximasClases($instructorId, $limite = 5)
     {
         $sql  = "SELECT h.*, f.CODIGO_FICHA, p.NOMBRE AS PROGRAMA_NOMBRE
@@ -103,4 +113,58 @@ class InstructorDAO extends BaseDatos
         ]);
         return $stmt ? $stmt->fetchAll() : [];
     }
+
+    // ========== NUEVOS MÉTODOS PARA ADMINISTRACIÓN DE FICHAS ==========
+
+    /**
+     * Obtiene los IDs de las fichas asignadas a un instructor.
+     * @param int $instructorId
+     * @return array
+     */
+    public function obtenerFichasIds($instructorId)
+    {
+        $sql = "SELECT FICHA_ID FROM (
+                    SELECT FICHA_ID FROM instructor_ficha WHERE INSTRUCTOR_ID = :id
+                    UNION
+                    SELECT GESTOR_FICHA_ID AS FICHA_ID FROM instructor WHERE INSTRUCTOR_ID = :id AND GESTOR_FICHA_ID IS NOT NULL
+                ) AS t";
+        $stmt = $this->ejecutarPreparado($sql, [':id' => $instructorId]);
+        if (!$stmt) return [];
+        $ids = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $ids[] = (int)$row['FICHA_ID'];
+        }
+        return $ids;
+    }
+
+    /**
+     * Reemplaza las fichas asignadas a un instructor por las que se pasan en el array.
+     * @param int $instructorId
+     * @param array $fichasIds Array de IDs de fichas (puede estar vacío)
+     * @return bool
+     */
+    public function actualizarFichas($instructorId, array $fichasIds)
+    {
+        try {
+            $this->Conexion_ID->beginTransaction();
+            // Eliminar todas las asignaciones actuales
+            $sqlDel = "DELETE FROM instructor_ficha WHERE INSTRUCTOR_ID = :id";
+            $this->ejecutarPreparado($sqlDel, [':id' => $instructorId]);
+            // Insertar las nuevas
+            if (!empty($fichasIds)) {
+                $sqlIns = "INSERT INTO instructor_ficha (INSTRUCTOR_ID, FICHA_ID) VALUES (:instId, :fichaId)";
+                $stmt = $this->Conexion_ID->prepare($sqlIns);
+                foreach ($fichasIds as $fichaId) {
+                    $stmt->execute([':instId' => $instructorId, ':fichaId' => $fichaId]);
+                }
+            }
+            $this->Conexion_ID->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->Conexion_ID->rollBack();
+            error_log("Error actualizando fichas del instructor {$instructorId}: " . $e->getMessage());
+            return false;
+        }
+    }
 }
+?>

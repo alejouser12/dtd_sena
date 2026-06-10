@@ -1,13 +1,12 @@
 <?php
 // mod/instructor_dashboard.php — v2 con manejo robusto de errores
-ini_set('display_errors', 0); // cambiar a 1 si quieres ver errores en pantalla
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 session_start();
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/app.php';
 
-// Protección de rol
 if (!esInstructor() && !esAdmin()) {
     redirect_to('index.php');
 }
@@ -15,10 +14,16 @@ if (!esInstructor() && !esAdmin()) {
 require_once __DIR__ . '/../conexion/instructorDAO.php';
 require_once __DIR__ . '/../conexion/FichaDAO.php';
 require_once __DIR__ . '/../conexion/AlertaDAO.php';
+require_once __DIR__ . '/../conexion/JustificacionDAO.php';  // <-- NUEVO para justificaciones
 
-$instId = (int)($_SESSION['usuario_ref_id'] ?? 0);
+$instId = 0;
+// Preferir instructor_id pasado por GET (útil para administradores viendo otro instructor)
+if (isset($_GET['instructor_id']) && is_numeric($_GET['instructor_id'])) {
+    $instId = (int)$_GET['instructor_id'];
+} else {
+    $instId = (int)($_SESSION['usuario_ref_id'] ?? 0);
+}
 
-// Si es admin sin ref_id, mostrar dashboard vacío igualmente
 $instructor = null;
 $fichas     = [];
 $alertas    = [];
@@ -37,7 +42,43 @@ if ($instId > 0) {
     }
 }
 
-// Derivar regional/centro de las fichas
+// Si no se obtuvo instId desde session o GET, intentar resolver por email de sesión
+if (esInstructor() && $instId <= 0) {
+    try {
+        $instDAO = new InstructorDAO();
+        $email = $_SESSION['usuario_email'] ?? '';
+        if (!empty($email)) {
+            $c = $instDAO->buscarPorColumna('EMAIL', $email);
+            if (!empty($c) && isset($c[0]['INSTRUCTOR_ID'])) {
+                $instId = (int)$c[0]['INSTRUCTOR_ID'];
+                // volver a cargar datos
+                $instructor = $instDAO->obtenerPorId($instId);
+                $fichas     = $instDAO->obtenerFichas($instId);
+                $alertaDAO  = $alertaDAO ?? new AlertaDAO();
+                $alertas    = $alertaDAO->obtenerAlertasConFiltros('instructor', $instId, null, null, 'Activa');
+            }
+        }
+    } catch (Exception $e) {
+        error_log('instructor_dashboard resolver por email error: ' . $e->getMessage());
+    }
+}
+
+// Contar justificaciones pendientes para el instructor (solo sus fichas)
+$justificacionesPendientes = 0;
+if ($instId > 0 && esInstructor()) {
+    try {
+        $justDAO = new JustificacionDAO();
+        $justificacionesPendientes = $justDAO->contarPendientesPorInstructor($instId);
+    } catch (Exception $e) {
+        error_log('Error contando justificaciones: ' . $e->getMessage());
+    }
+}
+
+// Log simple para depuración cuando un instructor no ve datos
+if (esInstructor()) {
+    error_log(sprintf("instructor_dashboard: instId=%s, instructor_found=%s, fichas_count=%d, alertas_count=%d, just_pend=%d", var_export($instId, true), $instructor ? '1' : '0', is_array($fichas) ? count($fichas) : 0, is_array($alertas) ? count($alertas) : 0, $justificacionesPendientes));
+}
+
 $regionalNombre = '—';
 $centroNombre   = '—';
 
@@ -49,7 +90,7 @@ if (!empty($fichas)) {
             $centroNombre   = $detalle['centro_nombre']   ?? '—';
             $regionalNombre = $detalle['regional_nombre'] ?? '—';
         }
-    } catch (Exception $e) { /* silencioso */ }
+    } catch (Exception $e) { }
 }
 
 $totalFichas     = count($fichas);
@@ -123,7 +164,6 @@ if ($iniciales === '') $iniciales = 'IN';
 
 <main class="container" id="contenido-principal" style="display:none;opacity:0;">
 
-    <!-- HERO -->
     <div class="inst-hero">
         <div class="inst-avatar"><?= htmlspecialchars($iniciales) ?></div>
         <div>
@@ -147,7 +187,6 @@ if ($iniciales === '') $iniciales = 'IN';
         </div>
     </div>
 
-    <!-- STATS -->
     <div class="inst-stats">
         <div class="inst-stat">
             <div class="inst-stat-icon" style="background:linear-gradient(135deg,#39a900,#2d8a00);"><i class="fas fa-layer-group"></i></div>
@@ -167,11 +206,10 @@ if ($iniciales === '') $iniciales = 'IN';
         </div>
     </div>
 
-    <!-- FICHAS -->
     <div class="sec-hdr">
         <h2><i class="fas fa-layer-group"></i> Mis Fichas</h2>
         <?php if ($totalFichas > 0): ?>
-        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php')) ?>" class="btn-sm btn-sm-outline">
+        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php?instructor_id='.$instId)) ?>" class="btn-sm btn-sm-outline">
             <i class="fas fa-users"></i> Ver todos mis aprendices
         </a>
         <?php endif; ?>
@@ -214,11 +252,10 @@ if ($iniciales === '') $iniciales = 'IN';
     </div>
     <?php endif; ?>
 
-    <!-- ALERTAS RECIENTES -->
     <div class="sec-hdr">
         <h2><i class="fas fa-bell"></i> Alertas de mis Aprendices</h2>
         <?php if ($totalAlertas > 0): ?>
-        <a href="<?= htmlspecialchars(app_url('mod/alertas.php')) ?>" class="btn-sm btn-sm-outline">
+        <a href="<?= htmlspecialchars(app_url('mod/alertas.php'.($instId?('?instructor_id='.$instId):''))) ?>" class="btn-sm btn-sm-outline">
             Ver todas (<?= $totalAlertas ?>)
         </a>
         <?php endif; ?>
@@ -265,16 +302,15 @@ if ($iniciales === '') $iniciales = 'IN';
         <?php endif; ?>
     <?php endif; ?>
 
-    <!-- ACCESOS RÁPIDOS -->
     <div class="sec-hdr" style="margin-top:32px;">
         <h2><i class="fas fa-bolt"></i> Accesos Rápidos</h2>
     </div>
     <div class="inst-stats" style="margin-bottom:0;">
-        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php')) ?>" class="inst-stat">
+        <a href="<?= htmlspecialchars(app_url('mod/aprendices.php?instructor_id='.$instId)) ?>" class="inst-stat">
             <div class="inst-stat-icon" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);"><i class="fas fa-user-graduate"></i></div>
             <div><div class="inst-stat-val" style="font-size:15px;">Aprendices</div><div class="inst-stat-lbl">Ver listado</div></div>
         </a>
-        <a href="<?= htmlspecialchars(app_url('mod/asistencias.php')) ?>" class="inst-stat">
+        <a href="<?= htmlspecialchars(app_url('mod/asistencias.php?instructor_id='.$instId)) ?>" class="inst-stat">
             <div class="inst-stat-icon" style="background:linear-gradient(135deg,#39a900,#2d8a00);"><i class="fas fa-calendar-check"></i></div>
             <div><div class="inst-stat-val" style="font-size:15px;">Asistencias</div><div class="inst-stat-lbl">Registrar</div></div>
         </a>
@@ -282,7 +318,23 @@ if ($iniciales === '') $iniciales = 'IN';
             <div class="inst-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);"><i class="fas fa-file-alt"></i></div>
             <div><div class="inst-stat-val" style="font-size:15px;">Evidencias</div><div class="inst-stat-lbl">Calificar</div></div>
         </a>
-        <a href="<?= htmlspecialchars(app_url('mod/alertas.php')) ?>" class="inst-stat">
+        <!-- BOTÓN NUEVO: Justificaciones con contador de pendientes -->
+        <a href="<?= htmlspecialchars(app_url('mod/instructor_justificaciones.php')) ?>" class="inst-stat">
+            <div class="inst-stat-icon" style="background:linear-gradient(135deg,#f59e0b,#ea580c);"><i class="fas fa-file-signature"></i></div>
+            <div>
+                <div class="inst-stat-val" style="font-size:15px;">Justificaciones</div>
+                <div class="inst-stat-lbl">
+                    Pendientes: 
+                    <?php if ($justificacionesPendientes > 0): ?>
+                        <span style="background:#dc2626; color:white; padding:2px 8px; border-radius:20px; font-size:11px;"><?= $justificacionesPendientes ?></span>
+                    <?php else: ?>
+                        <span>0</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </a>
+        <!-- Fin botón -->
+        <a href="<?= htmlspecialchars(app_url('mod/alertas.php'.($instId?('?instructor_id='.$instId):''))) ?>" class="inst-stat">
             <div class="inst-stat-icon" style="background:linear-gradient(135deg,#dc2626,#b91c1c);"><i class="fas fa-bell"></i></div>
             <div><div class="inst-stat-val" style="font-size:15px;">Alertas</div><div class="inst-stat-lbl">Gestionar</div></div>
         </a>
